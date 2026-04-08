@@ -4504,6 +4504,8 @@ function showStartStepConfirm(title, callback) {
     document.getElementById('start-step-title').textContent = title;
     overlay.style.display = '';
 
+    const startBtn = document.getElementById('btn-start-step-now');
+
     // Lắng nghe real-time trạng thái nhóm
     const listener = db.ref(`rooms/${STATE.roomId}/groups`).on('value', snap => {
         const groups = snap.val() || {};
@@ -4519,11 +4521,29 @@ function showStartStepConfirm(title, callback) {
                 <span class="oss-name">${g && g.members ? g.members[0] : '—'}</span>
             </div>`;
         }
-        document.getElementById('start-step-summary').innerHTML =
-            `<span style="color:var(--success)">${onCount} online</span> / <span style="color:var(--danger)">${TOTAL_GROUPS - onCount} offline</span>`;
+
+        // [NEW] Kiểm tra nếu 0 HS online → disable nút Bắt đầu + cảnh báo
+        const summaryEl = document.getElementById('start-step-summary');
+        if (onCount === 0) {
+            summaryEl.innerHTML = `<span style="color:var(--danger)"><i class="fas fa-exclamation-triangle"></i> Chưa có học sinh nào tham gia! Không thể bắt đầu.</span>`;
+            startBtn.disabled = true;
+            startBtn.style.opacity = '0.4';
+            startBtn.style.cursor = 'not-allowed';
+        } else {
+            summaryEl.innerHTML =
+                `<span style="color:var(--success)">${onCount} online</span> / <span style="color:var(--danger)">${TOTAL_GROUPS - onCount} offline</span>`;
+            startBtn.disabled = false;
+            startBtn.style.opacity = '';
+            startBtn.style.cursor = '';
+        }
     });
 
-    document.getElementById('btn-start-step-now').onclick = () => {
+    startBtn.onclick = () => {
+        // Double-check: nếu vẫn disabled thì không cho bắt đầu
+        if (startBtn.disabled) {
+            showToast('Chưa có học sinh nào online! Không thể bắt đầu.', 'error');
+            return;
+        }
         db.ref(`rooms/${STATE.roomId}/groups`).off('value', listener);
         overlay.style.display = 'none';
         // Gửi countdown signal cho HS rồi thực thi callback
@@ -4532,6 +4552,10 @@ function showStartStepConfirm(title, callback) {
     document.getElementById('btn-start-step-cancel').onclick = () => {
         db.ref(`rooms/${STATE.roomId}/groups`).off('value', listener);
         overlay.style.display = 'none';
+        // Reset nút khi đóng
+        startBtn.disabled = false;
+        startBtn.style.opacity = '';
+        startBtn.style.cursor = '';
     };
 }
 

@@ -457,7 +457,18 @@ body {
     cursor: pointer; transition: all 0.3s;
 }
 .time-btn.active { background: linear-gradient(135deg, var(--success), var(--success-end)); color: #fff; border-color: transparent; }
-.custom-time input { width: 130px; padding: 8px 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border); border-radius: var(--radius-xs); color: #fff; font-family: var(--font); font-size: 12px; }
+.custom-time {
+    display: flex; align-items: center; gap: 4px;
+}
+.custom-time input {
+    width: 80px; padding: 8px 12px; text-align: center;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--glass-border); border-radius: var(--radius-xs);
+    color: #fff; font-family: var(--font); font-size: 12px; font-weight: 600;
+}
+.custom-time input:focus { border-color: var(--primary); outline: none; }
+.custom-time input::placeholder { color: var(--text-muted); font-weight: 400; }
+.custom-time span { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 
 /* Saved questions list */
 .saved-questions-list { max-height: 400px; overflow-y: auto; }
