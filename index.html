@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Ứng dụng dạy học tương tác - Thảo luận nhóm & Trắc nghiệm">
+    <title>Dạy Học Tương Tác</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- KaTeX Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ============================================
+         TOAST NOTIFICATION CONTAINER
+    ============================================= -->
+    <div id="toast-container"></div>
+
+    <!-- ============================================
+         1. MÀN HÌNH ĐĂNG NHẬP
+         - Tab Học sinh: nhập tên + chọn nhóm
+         - Tab Giáo viên: nhập mật khẩu
+    ============================================= -->
+    <section id="login-screen" class="screen active">
+        <div class="login-wrapper">
+            <!-- Logo & Title -->
+            <div class="login-header">
+                <div class="logo-icon">
+                    <i class="fas fa-graduation-cap"></i>
+                </div>
+                <h1>Dạy Học Tương Tác</h1>
+                <p class="subtitle">Nền tảng học tập hiện đại</p>
+            </div>
+
+            <!-- Tab Switcher -->
+            <div class="tab-switcher">
+                <button class="tab-btn active" data-tab="student-tab" id="btn-tab-student">
+                    <i class="fas fa-user-graduate"></i> Học sinh
+                </button>
+                <button class="tab-btn" data-tab="teacher-tab" id="btn-tab-teacher">
+                    <i class="fas fa-chalkboard-teacher"></i> Giáo viên
+                </button>
+            </div>
+
+            <!-- Student Login Tab -->
+            <div class="tab-content active" id="student-tab">
+                <div class="glass-card" style="text-align:center; padding: 32px 24px;">
+                    <div style="font-size: 48px; margin-bottom: 12px;">🖥️</div>
+                    <h3 style="margin: 0 0 8px; font-size: 18px;">Chọn máy tính của bạn</h3>
+                    <p style="color: rgba(255,255,255,0.55); font-size: 14px; margin: 0 0 24px;">
+                        Nhấn vào màn hình máy tính của mình trong phòng học
+                    </p>
+                    <button class="btn-primary btn-login" id="btn-student-login">
+                        <i class="fas fa-door-open"></i> Vào phòng học
+                    </button>
+                </div>
+            </div>
+
+            <!-- Teacher Login Tab -->
+            <div class="tab-content" id="teacher-tab">
+                <div class="glass-card">
+                    <div class="form-group">
+                        <label for="teacher-password">
+                            <i class="fas fa-lock"></i> Mật khẩu giáo viên
+                        </label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="teacher-password" placeholder="Nhập mật khẩu...">
+                            <button class="toggle-password" id="toggle-password">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn-primary btn-login" id="btn-teacher-login">
+                        <i class="fas fa-sign-in-alt"></i> Đăng nhập
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- ============================================
+         2A. LOBBY — CHỌN MÁY TÍNH
+         Học sinh nhấn vào ô số máy của mình
+    ============================================= -->
+    <section id="student-lobby" class="screen">
+        <div class="lobby-wrapper">
+            <div class="lobby-header">
+                <div class="lobby-logo"><i class="fas fa-graduation-cap"></i></div>
+                <h2>Chọn máy tính của bạn</h2>
+                <p>Nhấn vào số máy bạn đang ngồi</p>
+            </div>
+            <div class="lobby-grid" id="lobby-grid">
+                <!-- 18 ô render bởi JS -->
+            </div>
+            <div class="lobby-legend">
+                <span class="legend-dot online"></span> Đã có người &nbsp;
+                <span class="legend-dot"></span> Còn trống
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         2B. NHẬP TÊN — SAU KHI CHỌN MÁY
+    ============================================= -->
+    <section id="student-name-screen" class="screen">
+        <div class="name-screen-wrapper">
+            <div class="glass-card name-card">
+                <div class="name-screen-machine" id="name-screen-machine">
+                    <i class="fas fa-desktop"></i> Máy số <strong id="name-screen-num">1</strong>
+                </div>
+                <h2>Nhập tên của bạn</h2>
+                <div class="form-group" style="margin: 20px 0;">
+                    <input type="text" id="student-name-input" placeholder="Họ và tên..." autocomplete="off" style="font-size:18px; text-align:center;">
+                </div>
+
+                <!-- Chọn Tổ (chỉ hiện khi GV đã cấu hình tổ) -->
+                <div class="form-group team-login-field" id="team-select-group" style="display:none;">
+                    <label><i class="fas fa-layer-group"></i> Chọn Tổ</label>
+                    <select id="student-team-select">
+                        <option value="">-- Chọn tổ --</option>
+                    </select>
+                </div>
+
+                <!-- Chọn vai trò (chỉ hiện khi GV đã cấu hình tổ) -->
+                <div class="form-group team-login-field" id="role-select-group" style="display:none;">
+                    <label><i class="fas fa-user-tag"></i> Chức năng</label>
+                    <div class="role-selector" id="role-selector">
+                        <button class="role-btn active" data-role="member" type="button">
+                            <i class="fas fa-user"></i> Thành viên
+                        </button>
+                        <button class="role-btn" data-role="leader" type="button">
+                            <i class="fas fa-crown"></i> Tổ trưởng
+                        </button>
+                    </div>
+                </div>
+
+                <div class="name-screen-actions">
+                    <button class="btn-secondary" id="btn-back-to-lobby">
+                        <i class="fas fa-arrow-left"></i> Đổi máy
+                    </button>
+                    <button class="btn-primary" id="btn-confirm-name" disabled style="flex:1;">
+                        <i class="fas fa-sign-in-alt"></i> Vào lớp học
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         2C. TRANG CHỦ HỌC SINH (thay phòng chờ)
+         - Header: tên nhóm + nút Thoát
+         - 4 Tabs: Chờ GV / Thảo luận / Trắc nghiệm / Điểm số
+    ============================================= -->
+    <section id="student-home" class="screen">
+        <!-- Header -->
+        <div class="sh-header">
+            <div class="sh-header-left">
+                <i class="fas fa-graduation-cap"></i>
+                <span>Dạy Học Tương Tác</span>
+            </div>
+            <div class="sh-header-center" id="sh-group-badge">
+                Nhóm 1 — HS
+            </div>
+            <div class="sh-header-right">
+                <button class="btn-logout-student" id="btn-student-logout">
+                    <i class="fas fa-sign-out-alt"></i> Thoát
+                </button>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="sh-tabs">
+            <button class="sh-tab active" data-tab="sh-tab-wait">
+                <i class="fas fa-clock"></i> Chờ GV
+            </button>
+            <button class="sh-tab" data-tab="sh-tab-disc">
+                <i class="fas fa-comments"></i> Thảo luận
+            </button>
+            <button class="sh-tab" data-tab="sh-tab-quiz">
+                <i class="fas fa-gamepad"></i> Trắc nghiệm
+            </button>
+            <button class="sh-tab" data-tab="sh-tab-score">
+                <i class="fas fa-trophy"></i> Điểm số
+            </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="sh-content">
+
+            <!-- Tab: Chờ GV -->
+            <div class="sh-tab-panel active" id="sh-tab-wait">
+                <div class="sh-online-bar" id="sh-online-bar">
+                    <!-- Real-time dots - render by JS -->
+                </div>
+                <div class="sh-wait-status">
+                    <div class="bouncing-dots"><span></span><span></span><span></span></div>
+                    <p id="sh-wait-text">Vui lòng chờ giáo viên bắt đầu buổi học...</p>
+                </div>
+            </div>
+
+            <!-- Tab: Thảo luận -->
+            <div class="sh-tab-panel" id="sh-tab-disc">
+                <div id="sh-disc-history">
+                    <p class="empty-state"><i class="fas fa-comments"></i> Chưa có hoạt động thảo luận nào.</p>
+                </div>
+            </div>
+
+            <!-- Tab: Trắc nghiệm -->
+            <div class="sh-tab-panel" id="sh-tab-quiz">
+                <div id="sh-quiz-history">
+                    <p class="empty-state"><i class="fas fa-gamepad"></i> Chưa có hoạt động trắc nghiệm nào.</p>
+                </div>
+            </div>
+
+            <!-- Tab: Điểm số -->
+            <div class="sh-tab-panel" id="sh-tab-score">
+                <div id="sh-score-content">
+                    <p class="empty-state"><i class="fas fa-trophy"></i> Chưa có điểm nào được ghi nhận.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Overlay: GV đang gửi hoạt động (auto-join notice) -->
+        <div class="sh-activity-incoming" id="sh-activity-incoming" style="display:none;">
+            <div class="sh-incoming-card">
+                <div class="sh-incoming-icon" id="sh-incoming-icon">🎯</div>
+                <div class="sh-incoming-title" id="sh-incoming-title">Trắc nghiệm bắt đầu!</div>
+                <div class="sh-incoming-sub">Đang chuyển màn hình...</div>
+                <div class="sh-incoming-countdown" id="sh-incoming-countdown">3</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Legacy waiting-room shim (hidden, kept for any code references) -->
+    <section id="waiting-room" class="screen" style="display:none!important;">
+        <div id="waiting-info" style="display:none"></div>
+        <div id="waiting-groups-list" style="display:none"></div>
+    </section>
+
+
+    <!-- ============================================
+         3. DASHBOARD GIÁO VIÊN — THIẾT KẾ MỚI
+         - Header cứng: logo, live online, công cụ
+         - 3 Tab: Chuẩn bị / Dạy học / Kết quả
+    ============================================= -->
+    <section id="teacher-dashboard" class="screen">
+        <div class="td-layout">
+
+            <!-- ===== HEADER CỐ ĐỊNH ===== -->
+            <header class="td-header">
+                <div class="td-header-left">
+                    <i class="fas fa-graduation-cap td-logo-icon"></i>
+                    <span class="td-logo-text">Dạy Học Tương Tác</span>
+                    <span class="td-room-code" id="room-code-display">---</span>
+                </div>
+
+                <!-- Live online badge -->
+                <div class="td-online-badge" id="td-online-badge">
+                    <span class="td-online-dot"></span>
+                    <span id="td-online-label">0/18 online</span>
+                </div>
+
+                <!-- Công cụ nhanh -->
+                <div class="td-header-tools">
+                    <button class="td-tool-btn" id="btn-toggle-sound" title="Bật/Tắt âm thanh">
+                        <i class="fas fa-volume-up"></i>
+                    </button>
+                    <button class="td-tool-btn" id="btn-random-group" title="Chọn ngẫu nhiên">
+                        <i class="fas fa-dice"></i>
+                    </button>
+                    <button class="td-tool-btn" id="btn-export-excel" title="Xuất Excel">
+                        <i class="fas fa-file-excel"></i>
+                    </button>
+                    <button class="td-tool-btn" id="btn-new-session" title="Phiên mới">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                    <button class="td-tool-btn danger" id="btn-reset-room" title="Reset phòng">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                    <button class="td-tool-btn logout" id="btn-teacher-logout" title="Đăng xuất">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- ===== NAVIGATION TABS ===== -->
+            <nav class="td-nav">
+                <button class="td-nav-btn active" data-panel="panel-prepare" id="menu-prepare">
+                    <i class="fas fa-edit"></i> Chuẩn bị
+                </button>
+                <button class="td-nav-btn" data-panel="panel-teach" id="menu-teach">
+                    <i class="fas fa-chalkboard-teacher"></i> Dạy học
+                </button>
+                <button class="td-nav-btn" data-panel="panel-results" id="menu-results">
+                    <i class="fas fa-chart-bar"></i> Kết quả
+                </button>
+            </nav>
+
+            <!-- ===== MAIN CONTENT ===== -->
+            <main class="td-content">
+
+                <!-- ========================================
+                     TAB 1: CHUẨN BỊ — Split View
+                     Trái: Ngân hàng câu hỏi
+                     Phải: Kế hoạch bài dạy
+                ======================================== -->
+                <div class="td-panel active" id="panel-prepare">
+                    <div class="td-split">
+
+                        <!-- LEFT: Ngân hàng câu hỏi -->
+                        <div class="td-split-left">
+                            <div class="td-section-header">
+                                <i class="fas fa-database"></i> Ngân hàng câu hỏi
+                            </div>
+
+                            <!-- Tabs: Thảo luận / Trắc nghiệm / Nhiệm vụ về nhà -->
+                            <div class="td-inner-tabs">
+                                <button class="td-inner-tab active" data-subtab="qbank-discussion" id="subtab-qbank-discussion">
+                                    <i class="fas fa-comments"></i> Thảo luận
+                                </button>
+                                <button class="td-inner-tab" data-subtab="qbank-quiz" id="subtab-qbank-quiz">
+                                    <i class="fas fa-gamepad"></i> Trắc nghiệm
+                                </button>
+                                <button class="td-inner-tab" data-subtab="qbank-homework" id="subtab-qbank-homework">
+                                    <i class="fas fa-home"></i> Nhiệm vụ về nhà
+                                </button>
+                            </div>
+
+                            <!-- Tab: Câu hỏi thảo luận -->
+                            <div class="td-inner-panel active" id="qbank-discussion">
+                                <div class="glass-card">
+                                    <h3><i class="fas fa-plus-circle"></i> Soạn câu hỏi thảo luận</h3>
+                                    <div class="form-group">
+                                        <label>Tiêu đề câu hỏi</label>
+                                        <input type="text" id="disc-q-title" placeholder="VD: Câu hỏi về biến đổi khí hậu...">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Nội dung câu hỏi</label>
+                                        <textarea id="disc-q-content" rows="3" placeholder="Nhập nội dung chi tiết..."></textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-image"></i> Hình ảnh minh họa (tùy chọn)</label>
+                                        <div class="disc-image-upload-area">
+                                            <label class="disc-image-upload-btn" for="disc-q-image">
+                                                <i class="fas fa-cloud-upload-alt"></i> Chọn hình ảnh
+                                                <span class="file-types">(JPG, PNG — tối đa 2MB)</span>
+                                            </label>
+                                            <input type="file" id="disc-q-image" accept="image/*" style="display:none;">
+                                            <div class="disc-image-preview" id="disc-q-image-preview" style="display:none;">
+                                                <img id="disc-q-image-preview-img" src="" alt="Preview">
+                                                <button class="disc-image-remove-btn" id="btn-disc-remove-image"><i class="fas fa-times-circle"></i></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Thời gian thảo luận</label>
+                                        <div class="time-options">
+                                            <button class="time-btn" data-time="60">1 phút</button>
+                                            <button class="time-btn" data-time="120">2 phút</button>
+                                            <button class="time-btn active" data-time="180">3 phút</button>
+                                            <button class="time-btn" data-time="300">5 phút</button>
+                                            <button class="time-btn" data-time="600">10 phút</button>
+                                            <div class="custom-time">
+                                                <input type="number" id="disc-custom-time" placeholder="Tùy chỉnh" min="30" max="3600">
+                                                <span style="font-size:12px;color:var(--text-dim);margin-left:4px;">(giây)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class="btn-primary" id="btn-save-disc-question">
+                                        <i class="fas fa-save"></i> Lưu câu hỏi
+                                    </button>
+                                </div>
+                                <div class="glass-card mt-20">
+                                    <h3><i class="fas fa-list"></i> Câu hỏi đã lưu</h3>
+                                    <div class="saved-questions-list" id="disc-questions-list">
+                                        <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có câu hỏi nào</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab: Câu hỏi trắc nghiệm -->
+                            <div class="td-inner-panel" id="qbank-quiz">
+                                <div class="glass-card">
+                                    <h3><i class="fas fa-plus-circle"></i> Soạn câu hỏi trắc nghiệm</h3>
+                                    <div class="form-group">
+                                        <label>Dạng câu hỏi</label>
+                                        <div class="question-type-selector">
+                                            <button class="qtype-btn active" data-type="multiple-choice" id="qtype-mc"><i class="fas fa-list-ol"></i> Nhiều lựa chọn</button>
+                                            <button class="qtype-btn" data-type="true-false" id="qtype-tf"><i class="fas fa-check-circle"></i> Đúng/Sai</button>
+                                            <button class="qtype-btn" data-type="fill-blank" id="qtype-fb"><i class="fas fa-pen"></i> Điền khuyết</button>
+                                            <button class="qtype-btn" data-type="drag-drop" id="qtype-dd"><i class="fas fa-arrows-alt"></i> Kéo thả</button>
+                                            <button class="qtype-btn" data-type="image-match" id="qtype-im"><i class="fas fa-images"></i> Ghép hình</button>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Nội dung câu hỏi</label>
+                                        <textarea id="quiz-q-content" rows="3" placeholder="Nhập câu hỏi..."></textarea>
+                                    </div>
+                                    <div id="quiz-options-area"></div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Thời gian (giây)</label>
+                                            <input type="number" id="quiz-q-time" value="30" min="5" max="120">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Điểm</label>
+                                            <input type="number" id="quiz-q-points" value="100" min="10" max="1000" step="10">
+                                        </div>
+                                    </div>
+                                    <button class="btn-primary" id="btn-save-quiz-question">
+                                        <i class="fas fa-save"></i> Lưu câu hỏi
+                                    </button>
+                                </div>
+                                <div class="glass-card mt-20">
+                                    <h3><i class="fas fa-list"></i> Câu hỏi trắc nghiệm đã lưu</h3>
+                                    <div class="saved-questions-list" id="quiz-questions-list">
+                                        <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có câu hỏi nào</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab: Nhiệm vụ về nhà -->
+                            <div class="td-inner-panel" id="qbank-homework">
+                                <div class="glass-card">
+                                    <h3><i class="fas fa-plus-circle"></i> Soạn nhiệm vụ về nhà</h3>
+                                    <div class="form-group">
+                                        <label>Tiêu đề nhiệm vụ</label>
+                                        <input type="text" id="hw-task-title" placeholder="VD: Tìm hiểu biến đổi khí hậu">
+                                    </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-tasks"></i> Nhiệm vụ từng tổ</label>
+                                        <div id="hw-task-teams-area">
+                                            <p class="empty-state" style="font-size:12px;"><i class="fas fa-info-circle"></i> Bật chế độ tổ ở bên phải và lưu cấu hình tổ trước.</p>
+                                        </div>
+                                    </div>
+                                    <button class="btn-primary" id="btn-save-hw-task">
+                                        <i class="fas fa-save"></i> Lưu nhiệm vụ
+                                    </button>
+                                </div>
+                                <div class="glass-card mt-20">
+                                    <h3><i class="fas fa-list"></i> Nhiệm vụ đã lưu</h3>
+                                    <div class="saved-questions-list" id="hw-tasks-list">
+                                        <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có nhiệm vụ nào</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT: Quản lý Tổ + Kế hoạch bài dạy -->
+                        <div class="td-split-right">
+
+                            <!-- QUẢN LÝ TỔ -->
+                            <div class="td-section-header">
+                                <i class="fas fa-layer-group"></i> Quản lý Tổ
+                            </div>
+                            <div class="glass-card" id="team-manager-area">
+                                <h3><i class="fas fa-layer-group"></i> Cấu hình Tổ học sinh</h3>
+
+                                <!-- Toggle Bật/Tắt chế độ Tổ -->
+                                <div class="team-toggle-wrap">
+                                    <label class="team-toggle-label" for="team-mode-toggle">
+                                        <i class="fas fa-toggle-on"></i> Chế độ chia tổ
+                                    </label>
+                                    <label class="switch-toggle">
+                                        <input type="checkbox" id="team-mode-toggle">
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                    <span class="team-toggle-status" id="team-toggle-status">Tắt</span>
+                                </div>
+                                <p style="color:rgba(255,255,255,0.4);font-size:12px;margin:4px 0 14px;">Khi bật: HS sẽ chọn Tổ + Vai trò khi đăng nhập. Khi tắt: hoạt động bình thường.</p>
+
+                                <!-- Nội dung cấu hình (ẩn khi tắt) -->
+                                <div id="team-config-body" style="display:none;">
+                                    <div class="form-group">
+                                        <label>Số lượng tổ</label>
+                                        <div class="team-count-selector" id="team-count-selector">
+                                            <button class="team-count-btn" data-count="2">2</button>
+                                            <button class="team-count-btn" data-count="3">3</button>
+                                            <button class="team-count-btn active" data-count="4">4</button>
+                                            <button class="team-count-btn" data-count="5">5</button>
+                                            <button class="team-count-btn" data-count="6">6</button>
+                                            <input type="number" id="team-custom-count" min="2" max="9" placeholder="Tùy chỉnh" style="width:80px;">
+                                        </div>
+                                    </div>
+                                    <div id="team-names-list">
+                                        <!-- Render tên tổ -->
+                                    </div>
+                                    <button class="btn-primary" id="btn-save-teams" style="margin-top:12px;">
+                                        <i class="fas fa-save"></i> Lưu cấu hình tổ
+                                    </button>
+                                    <div class="team-live-status" id="team-live-status" style="margin-top:16px;">
+                                        <!-- Real-time: HS nào thuộc tổ nào -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="td-section-header" style="margin-top:24px;">
+                                <i class="fas fa-list-ol"></i> Kế hoạch bài dạy
+                            </div>
+
+                            <!-- Tạo kế hoạch mới -->
+                            <div class="glass-card" id="lp-builder-area">
+                                <h3><i class="fas fa-plus-circle"></i> Tạo kế hoạch mới</h3>
+                                <div class="form-group">
+                                    <label>Tiêu đề bài dạy</label>
+                                    <input type="text" id="lp-title" placeholder="VD: Bài 5 — Biến đổi khí hậu">
+                                </div>
+                                <div class="lp-steps-header">
+                                    <h4>Các bước hoạt động</h4>
+                                    <div class="lp-add-btns">
+                                        <button class="tool-btn" id="btn-lp-add-disc"><i class="fas fa-comments"></i> + Thảo luận</button>
+                                        <button class="tool-btn" id="btn-lp-add-quiz"><i class="fas fa-gamepad"></i> + Trắc nghiệm</button>
+                                        <button class="tool-btn" id="btn-lp-add-homework"><i class="fas fa-home"></i> + Nhiệm vụ về nhà</button>
+                                        <button class="tool-btn" id="btn-lp-add-summary"><i class="fas fa-chart-pie"></i> + Tổng kết</button>
+                                    </div>
+                                </div>
+                                <div class="lp-steps-list" id="lp-steps-list">
+                                    <p class="empty-state"><i class="fas fa-arrow-up"></i> Nhấn nút ở trên để thêm hoạt động</p>
+                                </div>
+                                <button class="btn-primary" id="btn-lp-save" style="margin-top:16px;">
+                                    <i class="fas fa-save"></i> Lưu kế hoạch
+                                </button>
+                            </div>
+
+                            <!-- Kế hoạch đã lưu -->
+                            <div class="glass-card mt-20">
+                                <h3><i class="fas fa-folder-open"></i> Kế hoạch đã lưu</h3>
+                                <div id="lp-saved-list">
+                                    <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có kế hoạch nào</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========================================
+                     TAB 2: DẠY HỌC — Two-column
+                     Trái: Kế hoạch + Timeline bước học
+                     Phải: Live activity panel
+                ======================================== -->
+                <div class="td-panel" id="panel-teach">
+                    <div class="td-teach-layout">
+
+                        <!-- LEFT: Kế hoạch + Timeline -->
+                        <div class="td-teach-left">
+                            <!-- Online dots (mini) -->
+                            <div class="td-groups-bar-wrap">
+                                <div class="td-section-label"><i class="fas fa-users"></i> Trạng thái nhóm</div>
+                                <div class="teach-groups-bar" id="teach-groups-bar"></div>
+                            </div>
+
+                            <!-- Chọn kế hoạch (khi chưa kích hoạt) -->
+                            <div id="teach-plan-selector">
+                                <div class="td-section-label"><i class="fas fa-rocket"></i> Chọn kế hoạch</div>
+                                <div id="teach-plan-list">
+                                    <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có kế hoạch. Vào tab Chuẩn bị để tạo.</p>
+                                </div>
+                            </div>
+
+                            <!-- Kế hoạch đang chạy + timeline (khi đã kích hoạt) -->
+                            <div id="lp-control-area" style="display:none;">
+                                <div class="lp-active-header">
+                                    <h3><i class="fas fa-play-circle"></i> <span id="lp-active-title"></span></h3>
+                                    <button class="btn-danger" id="btn-lp-end" style="width:auto;padding:8px 14px;font-size:12px;">
+                                        <i class="fas fa-stop"></i> Kết thúc
+                                    </button>
+                                </div>
+                                <div class="lp-activity-cards" id="lp-activity-cards">
+                                    <!-- Timeline cards: render by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Random picker overlay -->
+                            <div class="random-picker-overlay" id="random-picker-overlay" style="display:none;">
+                                <div class="random-picker-card glass-card">
+                                    <h3><i class="fas fa-dice"></i> Chọn ngẫu nhiên nhóm</h3>
+                                    <div class="random-display" id="random-display">?</div>
+                                    <p class="random-result" id="random-result"></p>
+                                    <div class="random-actions">
+                                        <button class="btn-primary" id="btn-random-spin"><i class="fas fa-sync-alt"></i> Quay</button>
+                                        <button class="btn-danger" id="btn-random-close"><i class="fas fa-times"></i> Đóng</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RIGHT: Live activity panel -->
+                        <div class="td-teach-right">
+                            <!-- Idle state -->
+                            <div id="activity-view-idle" class="td-live-idle">
+                                <i class="fas fa-hand-pointer td-idle-icon"></i>
+                                <p>Chọn hoạt động bên trái để bắt đầu</p>
+                            </div>
+
+                            <!-- Container hoạt động (wraps all activity views) -->
+                            <div id="activity-view">
+
+                                <!-- THẢO LUẬN -->
+                                <div id="activity-discussion-view" style="display:none;">
+                                    <div class="activity-view-header">
+                                        <h3><i class="fas fa-comments"></i> Thảo luận nhóm</h3>
+                                        <div class="header-actions">
+                                            <div class="timer-display" id="teacher-disc-timer">
+                                                <i class="fas fa-clock"></i> <span id="teacher-disc-time">--:--</span>
+                                            </div>
+                                            <div class="timer-controls" id="timer-controls" style="display:none;">
+                                                <button class="tool-btn small" id="btn-timer-pause" title="Tạm dừng"><i class="fas fa-pause"></i></button>
+                                                <button class="tool-btn small" id="btn-timer-resume" title="Tiếp tục" style="display:none;"><i class="fas fa-play"></i></button>
+                                                <button class="tool-btn small" id="btn-timer-add1" title="+1 phút"><i class="fas fa-plus"></i> 1p</button>
+                                                <button class="tool-btn small" id="btn-timer-add2" title="+2 phút"><i class="fas fa-plus"></i> 2p</button>
+                                            </div>
+                                            <button class="btn-danger" id="btn-stop-discussion" style="display:none;">
+                                                <i class="fas fa-stop-circle"></i> Dừng
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Gửi câu hỏi (khi không có kế hoạch) -->
+                                    <div id="disc-send-area" style="display:none;">
+                                        <div class="form-group">
+                                            <label>Chọn câu hỏi từ ngân hàng</label>
+                                            <select id="disc-question-select">
+                                                <option value="">-- Chọn câu hỏi --</option>
+                                            </select>
+                                        </div>
+                                        <div class="question-preview" id="disc-question-preview" style="display:none;"></div>
+                                        <button class="btn-primary" id="btn-send-discussion">
+                                            <i class="fas fa-paper-plane"></i> Gửi cho học sinh
+                                        </button>
+                                    </div>
+
+                                    <!-- Câu trả lời nhóm -->
+                                    <div id="disc-answers-area" style="display:none;">
+                                        <div class="disc-answers-header">
+                                            <h4><i class="fas fa-inbox"></i> Câu trả lời từ các nhóm</h4>
+                                            <div class="disc-answers-toolbar">
+                                                <span class="submit-progress" id="disc-submit-progress">0/18 đã nộp</span>
+                                                <select id="disc-answer-filter" class="disc-filter-select">
+                                                    <option value="all">Tất cả</option>
+                                                    <option value="unevaluated">Chưa đánh giá</option>
+                                                    <option value="evaluated">Đã đánh giá</option>
+                                                </select>
+                                                <button class="tool-btn small" id="btn-toggle-compact" title="Thu gọn/Mở rộng"><i class="fas fa-compress-alt"></i></button>
+                                            </div>
+                                        </div>
+                                        <div class="answers-grid" id="disc-answers-grid"></div>
+                                    </div>
+
+                                    <!-- Phân tích & nhận xét chung -->
+                                    <div id="disc-answer-summary" style="display:none;">
+                                        <h4><i class="fas fa-chart-pie"></i> Phân tích câu trả lời</h4>
+                                        <div class="answer-clusters" id="disc-answer-clusters"></div>
+                                        <div class="bulk-eval-section" id="bulk-eval-section">
+                                            <h4><i class="fas fa-bullhorn"></i> Nhận xét chung cho tất cả</h4>
+                                            <textarea id="bulk-eval-comment" rows="2" placeholder="Nhận xét gửi cho tất cả nhóm..."></textarea>
+                                            <div class="bulk-eval-actions">
+                                                <div class="star-rating" id="bulk-eval-stars">
+                                                    <span class="star" data-star="1" onclick="rateBulkStar(1)">★</span>
+                                                    <span class="star" data-star="2" onclick="rateBulkStar(2)">★</span>
+                                                    <span class="star" data-star="3" onclick="rateBulkStar(3)">★</span>
+                                                    <span class="star" data-star="4" onclick="rateBulkStar(4)">★</span>
+                                                    <span class="star" data-star="5" onclick="rateBulkStar(5)">★</span>
+                                                </div>
+                                                <button class="btn-primary" id="btn-bulk-eval" style="width:auto;padding:10px 20px;">
+                                                    <i class="fas fa-paper-plane"></i> Gửi cho tất cả
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- TRẮC NGHIỆM -->
+                                <div id="activity-quiz-view" style="display:none;">
+                                    <div class="activity-view-header">
+                                        <h3><i class="fas fa-gamepad"></i> Trắc nghiệm tương tác</h3>
+                                        <span id="teacher-quiz-question-counter" class="quiz-counter-badge"></span>
+                                    </div>
+
+                                    <div id="quiz-setup-area" style="display:none;">
+                                        <h4><i class="fas fa-cog"></i> Thiết lập trắc nghiệm</h4>
+                                        <div class="quiz-question-checklist" id="quiz-question-checklist">
+                                            <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có câu hỏi. Vui lòng soạn trong tab Chuẩn bị.</p>
+                                        </div>
+                                        <button class="btn-primary btn-large" id="btn-start-quiz" disabled>
+                                            <i class="fas fa-play"></i> Bắt đầu trắc nghiệm
+                                        </button>
+                                    </div>
+
+                                    <div id="quiz-control-area" style="display:none;">
+                                        <div class="quiz-teacher-view">
+                                            <div class="quiz-progress">
+                                                <span id="quiz-progress-text">Câu 1/10</span>
+                                                <div class="progress-bar">
+                                                    <div class="progress-fill" id="quiz-progress-fill"></div>
+                                                </div>
+                                            </div>
+                                            <div class="quiz-current-question" id="quiz-teacher-question"></div>
+                                            <div class="quiz-stats-enhanced" id="quiz-answer-stats">
+                                                <div class="quiz-stats-row" id="quiz-stats-counts"></div>
+                                                <div class="quiz-bar-chart" id="quiz-bar-chart"></div>
+                                                <div class="quiz-groups-result" id="quiz-groups-result" style="display:none;">
+                                                    <div class="groups-correct" id="quiz-groups-correct"></div>
+                                                    <div class="groups-wrong" id="quiz-groups-wrong"></div>
+                                                </div>
+                                            </div>
+                                            <button class="btn-warning" id="btn-quiz-show-answer" style="margin-right:8px;">
+                                                <i class="fas fa-eye"></i> Xem kết quả
+                                            </button>
+                                            <button class="btn-primary" id="btn-quiz-next" style="display:none;">
+                                                <i class="fas fa-forward"></i> Câu tiếp theo
+                                            </button>
+                                            <button class="btn-danger" id="btn-quiz-end" style="display:none;">
+                                                <i class="fas fa-flag-checkered"></i> Kết thúc
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div id="quiz-ranking-area" style="display:none;">
+                                        <div class="teacher-lb-container">
+                                            <div class="teacher-lb-header">
+                                                <div class="teacher-lb-trophy">🏆</div>
+                                                <h4>Bảng xếp hạng</h4>
+                                                <div class="teacher-lb-subtitle" id="teacher-lb-subtitle"></div>
+                                            </div>
+                                            <div class="teacher-lb-list" id="quiz-ranking-list"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- TỔNG KẾT -->
+                                <div id="activity-summary-view" style="display:none;">
+                                    <div class="activity-view-header">
+                                        <h3><i class="fas fa-chart-pie"></i> Tổng kết</h3>
+                                    </div>
+                                    <div id="step-summary-content">
+                                        <p class="empty-state"><i class="fas fa-clipboard-check"></i> Xem kết quả tổng hợp tại tab Kết quả</p>
+                                    </div>
+                                </div>
+
+                                <!-- NHIỆM VỤ VỀ NHÀ (GV) -->
+                                <div id="activity-homework-view" style="display:none;">
+                                    <div class="activity-view-header">
+                                        <h3><i class="fas fa-home"></i> Nhiệm vụ về nhà</h3>
+                                        <button class="btn-danger" id="btn-stop-homework">
+                                            <i class="fas fa-stop-circle"></i> Kết thúc
+                                        </button>
+                                    </div>
+
+                                    <!-- Chọn tổ đang trình bày -->
+                                    <div class="hw-presenting-bar" id="hw-presenting-bar">
+                                        <div class="hw-team-tabs" id="hw-team-tabs">
+                                            <!-- Render: nút cho mỗi tổ -->
+                                        </div>
+                                    </div>
+
+                                    <!-- GV action area — dynamic content rendered by renderTeacherActionBar -->
+                                    <div class="hw-teacher-eval" id="hw-teacher-eval" style="display:none;">
+                                        <!-- Content generated dynamically based on phase -->
+                                    </div>
+
+                                    <!-- Trạng thái submit các tổ -->
+                                    <div class="hw-eval-status" id="hw-eval-status"></div>
+
+                                    <!-- Bảng tổng hợp điểm -->
+                                    <div class="hw-score-matrix-wrap" id="hw-score-matrix-wrap">
+                                        <h4><i class="fas fa-table"></i> Bảng đánh giá tổng hợp</h4>
+                                        <div class="hw-matrix-scroll" id="hw-matrix-scroll">
+                                            <!-- Render bảng matrix -->
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div><!-- /#activity-view -->
+                        </div><!-- /.td-teach-right -->
+                    </div><!-- /.td-teach-layout -->
+                </div><!-- /#panel-teach -->
+
+                <!-- ========================================
+                     TAB 3: KẾT QUẢ — Split View
+                     Trên: Thống kê nhanh
+                     Trái: Bảng xếp hạng
+                     Phải: Lịch sử phiên học
+                ======================================== -->
+                <div class="td-panel" id="panel-results">
+                    <!-- Stats nhanh -->
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-number" id="stat-online">0</span>
+                                <span class="stat-label">Nhóm online</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
+                                <i class="fas fa-question-circle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-number" id="stat-questions">0</span>
+                                <span class="stat-label">Câu hỏi đã soạn</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">
+                                <i class="fas fa-clipboard-check"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-number" id="stat-submitted">0</span>
+                                <span class="stat-label">Đã nộp bài</span>
+                            </div>
+                        </div>
+                        <div class="stat-card" style="cursor:pointer;" id="btn-export-excel-results">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #11998e, #38ef7d);">
+                                <i class="fas fa-file-excel"></i>
+                            </div>
+                            <div class="stat-info">
+                                <span class="stat-number" style="font-size:18px;">Xuất</span>
+                                <span class="stat-label">Excel</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Split: Ranking + History -->
+                    <div class="td-split results-split">
+                        <div class="td-split-left">
+                            <div class="glass-card">
+                                <h3><i class="fas fa-trophy" style="color:#ffd700"></i> Bảng xếp hạng thảo luận</h3>
+                                <div class="ranking-list" id="disc-ranking-list">
+                                    <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có đánh giá</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="td-split-right">
+                            <div class="glass-card">
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                                    <h3 style="margin:0;"><i class="fas fa-history"></i> Lịch sử phiên học</h3>
+                                    <select id="history-filter" style="width:auto;padding:6px 12px;font-size:12px;">
+                                        <option value="all">Tất cả</option>
+                                        <option value="discussion">Thảo luận</option>
+                                        <option value="quiz">Trắc nghiệm</option>
+                                    </select>
+                                </div>
+                                <div id="session-history-list">
+                                    <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có dữ liệu</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div><!-- /#panel-results -->
+
+            </main>
+        </div>
+    </section>
+
+    <!-- ============================================
+         4. MÀN HÌNH THẢO LUẬN (HỌC SINH)
+         - Câu hỏi + đếm ngược
+         - Nhập câu trả lời + upload file
+         - Nhận xét chéo
+    ============================================= -->
+    <section id="discussion-screen" class="screen">
+        <div class="discussion-wrapper">
+            <!-- Header -->
+            <div class="discussion-topbar">
+                <div class="topbar-left">
+                    <span class="group-badge" id="disc-student-group">Nhóm 1</span>
+                    <span class="student-name-badge" id="disc-student-name">Nguyễn Văn A</span>
+                </div>
+                <div class="topbar-center">
+                    <div class="countdown-circle" id="disc-countdown">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="countdown-bg" cx="50" cy="50" r="45"/>
+                            <circle class="countdown-fill" cx="50" cy="50" r="45" id="disc-countdown-circle"/>
+                        </svg>
+                        <span class="countdown-text" id="disc-countdown-text">03:00</span>
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <button class="btn-icon" id="btn-disc-logout" title="Đăng xuất">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Câu hỏi -->
+            <div class="glass-card question-card">
+                <div class="question-label"><i class="fas fa-question-circle"></i> Câu hỏi thảo luận</div>
+                <div class="question-content" id="disc-question-display">
+                    Đang chờ câu hỏi từ giáo viên...
+                </div>
+                <div class="question-image" id="disc-question-image" style="display:none;">
+                    <img id="disc-question-image-img" src="" alt="Hình ảnh câu hỏi" onclick="this.classList.toggle('zoomed')">
+                </div>
+            </div>
+
+            <!-- Khu vực trả lời -->
+            <div class="glass-card answer-card">
+                <div class="answer-label"><i class="fas fa-pen"></i> Câu trả lời của nhóm</div>
+                
+                <!-- Math toolbar -->
+                <div class="math-toolbar" id="math-toolbar">
+                    <span class="math-toolbar-label"><i class="fas fa-square-root-alt"></i> Công thức:</span>
+                    <button class="math-btn" data-insert="$x^{2}$" title="Lũy thừa">x²</button>
+                    <button class="math-btn" data-insert="$x_{n}$" title="Chỉ số dưới">xₙ</button>
+                    <button class="math-btn" data-insert="$\\frac{a}{b}$" title="Phân số">â₂</button>
+                    <button class="math-btn" data-insert="$\\sqrt{x}$" title="Căn bậc 2">√</button>
+                    <button class="math-btn" data-insert="$\\sqrt[n]{x}$" title="Căn bậc n">ⁿ√</button>
+                    <button class="math-btn" data-insert="$\\pm$" title="Cộng trừ">±</button>
+                    <button class="math-btn" data-insert="$\\times$" title="Nhân">×</button>
+                    <button class="math-btn" data-insert="$\\div$" title="Chia">÷</button>
+                    <button class="math-btn" data-insert="$\\leq$" title="Nhỏ hơn hoặc bằng">≤</button>
+                    <button class="math-btn" data-insert="$\\geq$" title="Lớn hơn hoặc bằng">≥</button>
+                    <button class="math-btn" data-insert="$\\neq$" title="Khác">≠</button>
+                    <button class="math-btn" data-insert="$\\alpha$" title="Alpha">α</button>
+                    <button class="math-btn" data-insert="$\\beta$" title="Beta">β</button>
+                    <button class="math-btn" data-insert="$\\pi$" title="Pi">π</button>
+                    <button class="math-btn" data-insert="$\\Delta$" title="Delta">Δ</button>
+                    <button class="math-btn" data-insert="$\\sum$" title="Tổng">∑</button>
+                    <button class="math-btn" data-insert="$\\int$" title="Tích phân">∫</button>
+                    <button class="math-btn" data-insert="$\\infty$" title="Vô cực">∞</button>
+                    <span class="math-toolbar-sep"></span>
+                    <span class="math-toolbar-label"><i class="fas fa-flask"></i> Hóa:</span>
+                    <button class="math-btn" data-insert="$H_2O$" title="Nước">H₂O</button>
+                    <button class="math-btn" data-insert="$CO_2$" title="CO2">CO₂</button>
+                    <button class="math-btn" data-insert="$\\rightarrow$" title="Phản ứng">→</button>
+                    <button class="math-btn" data-insert="$\\uparrow$" title="Khí thoát ra">↑</button>
+                    <button class="math-btn" data-insert="$\\downarrow$" title="Kết tủa">↓</button>
+                </div>
+                
+                <textarea id="disc-answer-input" rows="5" placeholder="Nhập câu trả lời... (Alt+Enter để xuống dòng, dùng $...$ cho công thức)"></textarea>
+                
+                <!-- Math preview -->
+                <div class="math-preview" id="math-preview" style="display:none;">
+                    <div class="math-preview-label"><i class="fas fa-eye"></i> Xem trước:</div>
+                    <div class="math-preview-content" id="math-preview-content"></div>
+                </div>
+                
+                <!-- Upload file -->
+                <div class="file-upload-area">
+                    <label class="file-upload-btn" for="disc-file-input">
+                        <i class="fas fa-paperclip"></i> Đính kèm file
+                        <span class="file-types">(Word, Excel, PDF, Ảnh - tối đa 2MB)</span>
+                    </label>
+                    <input type="file" id="disc-file-input" accept=".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png,.gif" multiple style="display:none;">
+                    <div class="file-preview-list" id="disc-file-preview">
+                        <!-- Preview files đính kèm -->
+                    </div>
+                </div>
+
+                <button class="btn-primary btn-submit" id="btn-submit-answer">
+                    <i class="fas fa-paper-plane"></i> Gửi câu trả lời
+                </button>
+                <div class="submitted-badge" id="disc-submitted-badge" style="display:none;">
+                    <i class="fas fa-check-circle"></i> Đã gửi thành công!
+                </div>
+            </div>
+
+            <!-- Khu vực xem câu trả lời nhóm khác + nhận xét chéo -->
+            <div class="glass-card peer-review-card" id="peer-review-area" style="display:none;">
+                <div class="section-title">
+                    <h3><i class="fas fa-users"></i> Câu trả lời các nhóm khác</h3>
+                </div>
+                <div class="peer-answers-list" id="peer-answers-list">
+                    <!-- Render bởi JS -->
+                </div>
+            </div>
+
+            <!-- Đánh giá từ giáo viên -->
+            <div class="glass-card evaluation-card" id="evaluation-area" style="display:none;">
+                <div class="section-title">
+                    <h3><i class="fas fa-star"></i> Đánh giá từ giáo viên</h3>
+                </div>
+                <div class="evaluation-content" id="evaluation-content">
+                    <!-- Render bởi JS -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         5. MÀN HÌNH QUIZ (HỌC SINH - KAHOOT STYLE)
+         - Câu hỏi + đếm ngược vòng tròn
+         - 4 dạng: Nhiều lựa chọn, Đúng/Sai, Điền khuyết, Kéo thả
+         - Bảng xếp hạng
+    ============================================= -->
+    <section id="quiz-screen" class="screen">
+        <div class="quiz-wrapper">
+            <!-- Quiz Header -->
+            <div class="quiz-topbar">
+                <div class="quiz-topbar-left">
+                    <span class="group-badge" id="quiz-student-group">Nhóm 1</span>
+                    <span class="quiz-score-badge" id="quiz-student-score">0 điểm</span>
+                </div>
+                <div class="quiz-topbar-center">
+                    <span id="quiz-question-counter">Câu 1/10</span>
+                </div>
+                <div class="quiz-topbar-right">
+                    <span class="quiz-rank-badge" id="quiz-student-rank">#1</span>
+                </div>
+            </div>
+
+            <!-- Countdown circle -->
+            <div class="quiz-countdown-wrapper">
+                <div class="quiz-countdown-circle" id="quiz-countdown">
+                    <svg viewBox="0 0 120 120">
+                        <circle class="countdown-bg" cx="60" cy="60" r="54"/>
+                        <circle class="countdown-fill" cx="60" cy="60" r="54" id="quiz-countdown-circle"/>
+                    </svg>
+                    <span class="countdown-text" id="quiz-countdown-text">30</span>
+                </div>
+            </div>
+
+            <!-- Question display -->
+            <div class="quiz-question-display">
+                <div class="quiz-question-text" id="quiz-question-text">
+                    Đang chờ câu hỏi...
+                </div>
+            </div>
+
+            <!-- Answer area - changes based on question type -->
+            <div class="quiz-answer-area" id="quiz-answer-area">
+                <!-- MULTIPLE CHOICE (default) -->
+                <div class="quiz-mc-grid" id="quiz-mc-options" style="display:none;">
+                    <button class="quiz-option-btn quiz-red" data-option="A" id="quiz-opt-a">
+                        <span class="option-shape">▲</span>
+                        <span class="option-text">Đáp án A</span>
+                    </button>
+                    <button class="quiz-option-btn quiz-blue" data-option="B" id="quiz-opt-b">
+                        <span class="option-shape">◆</span>
+                        <span class="option-text">Đáp án B</span>
+                    </button>
+                    <button class="quiz-option-btn quiz-yellow" data-option="C" id="quiz-opt-c">
+                        <span class="option-shape">●</span>
+                        <span class="option-text">Đáp án C</span>
+                    </button>
+                    <button class="quiz-option-btn quiz-green" data-option="D" id="quiz-opt-d">
+                        <span class="option-shape">■</span>
+                        <span class="option-text">Đáp án D</span>
+                    </button>
+                </div>
+
+                <!-- TRUE/FALSE -->
+                <div class="quiz-tf-grid" id="quiz-tf-options" style="display:none;">
+                    <button class="quiz-option-btn quiz-green quiz-tf-btn" data-option="true" id="quiz-opt-true">
+                        <i class="fas fa-check-circle"></i>
+                        <span class="option-text">ĐÚNG</span>
+                    </button>
+                    <button class="quiz-option-btn quiz-red quiz-tf-btn" data-option="false" id="quiz-opt-false">
+                        <i class="fas fa-times-circle"></i>
+                        <span class="option-text">SAI</span>
+                    </button>
+                </div>
+
+                <!-- FILL IN THE BLANK -->
+                <div class="quiz-fill-area" id="quiz-fill-options" style="display:none;">
+                    <div class="fill-sentence" id="quiz-fill-sentence">
+                        <!-- Câu có chỗ trống, render bởi JS -->
+                    </div>
+                    <div class="fill-input-group">
+                        <input type="text" id="quiz-fill-input" placeholder="Nhập đáp án..." autocomplete="off">
+                        <button class="btn-primary" id="btn-quiz-fill-submit">
+                            <i class="fas fa-check"></i> Xác nhận
+                        </button>
+                    </div>
+                </div>
+
+                <!-- DRAG & DROP -->
+                <div class="quiz-drag-area" id="quiz-drag-options" style="display:none;">
+                    <div class="drag-sentence" id="quiz-drag-sentence">
+                        <!-- Câu có drop zones, render bởi JS -->
+                    </div>
+                    <div class="drag-items-pool" id="quiz-drag-pool">
+                        <!-- Draggable items, render bởi JS -->
+                    </div>
+                    <button class="btn-primary" id="btn-quiz-drag-submit">
+                        <i class="fas fa-check"></i> Xác nhận
+                    </button>
+                </div>
+
+                <!-- IMAGE MATCH (Ghép hình - kéo thả) -->
+                <div class="quiz-image-match-area" id="quiz-image-match-options" style="display:none;">
+                    <div class="im-image-pool" id="im-image-pool">
+                        <!-- Render bởi JS -->
+                    </div>
+                    <div class="im-label-zones" id="im-label-zones">
+                        <!-- Render bởi JS -->
+                    </div>
+                    <button class="btn-primary im-submit-btn" id="btn-quiz-im-submit">
+                        <i class="fas fa-check"></i> Nộp bài
+                    </button>
+                </div>
+            </div>
+
+            <!-- ======================================================
+                 RESULT OVERLAY — Kahoot-style dramatic reveal
+            ====================================================== -->
+            <div class="quiz-result-overlay" id="quiz-result-overlay" style="display:none;">
+                <!-- Canvas confetti (đúng) / screen shake (sai) -->
+                <canvas id="quiz-confetti-canvas" class="confetti-canvas"></canvas>
+
+                <!-- Ripple background flash -->
+                <div class="result-ripple" id="result-ripple"></div>
+
+                <!-- Nội dung trung tâm -->
+                <div class="result-card" id="result-card">
+                    <!-- Icon lớn -->
+                    <div class="result-icon-wrap" id="quiz-result-icon">
+                        <!-- ✓ hoặc ✗ inject bởi JS -->
+                    </div>
+                    <!-- Text -->
+                    <div class="result-title" id="quiz-result-text">Chính xác!</div>
+                    <!-- Điểm -->
+                    <div class="result-score-badge" id="quiz-result-points">+100 điểm</div>
+                    <!-- Stars (chỉ khi đúng) -->
+                    <div class="result-stars" id="result-stars" style="display:none;">
+                        <span class="rstar">⭐</span>
+                        <span class="rstar">⭐</span>
+                        <span class="rstar">⭐</span>
+                    </div>
+                    <!-- Score float popup -->
+                    <div class="score-float-popup" id="score-float-popup"></div>
+                </div>
+            </div>
+
+            <!-- ======================================================
+                 SUBMITTED OVERLAY — Chờ kết quả (dramatic countdown)
+            ====================================================== -->
+            <div class="quiz-submitted-overlay" id="quiz-submitted-overlay" style="display:none;">
+                <div class="submitted-inner">
+                    <!-- Check icon -->
+                    <div class="sub-check-icon">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <div class="sub-title">Đã ghi nhận!</div>
+                    <div class="sub-hint">Kết quả sắp hiển thị...</div>
+                    <!-- Dramatic countdown ring -->
+                    <div class="sub-ring-wrap">
+                        <svg class="sub-ring-svg" viewBox="0 0 120 120">
+                            <circle class="sub-ring-bg" cx="60" cy="60" r="50"/>
+                            <circle class="sub-ring-fill" cx="60" cy="60" r="50" id="submitted-countdown-circle"/>
+                        </svg>
+                        <span class="sub-ring-text" id="submitted-countdown-text">10</span>
+                        <span class="sub-ring-label">giây</span>
+                    </div>
+                    <!-- Pulsing dots -->
+                    <div class="sub-dots">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Waiting overlay giữa các câu -->
+            <div class="quiz-waiting-overlay" id="quiz-waiting-overlay" style="display:none;">
+                <div class="waiting-next-content">
+                    <div class="bouncing-dots"><span></span><span></span><span></span></div>
+                    <p>Đang chờ giáo viên gửi câu tiếp theo...</p>
+                </div>
+            </div>
+
+
+            <!-- Bảng xếp hạng Kahoot-style (giữa các câu) -->
+            <div class="quiz-leaderboard-overlay" id="quiz-leaderboard-overlay" style="display:none;">
+                <div class="lb-container">
+                    <div class="lb-header">
+                        <div class="lb-trophy-icon">🏆</div>
+                        <h2>Bảng xếp hạng</h2>
+                        <div class="lb-subtitle" id="lb-subtitle">Sau câu 1</div>
+                    </div>
+                    <div class="lb-my-rank" id="lb-my-rank">
+                        <!-- Vị trí của nhóm bạn -->
+                    </div>
+                    <div class="lb-list" id="quiz-leaderboard-list">
+                        <!-- Render bởi JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kết quả cuối cùng - Podium style -->
+            <div class="quiz-final-overlay" id="quiz-final-overlay" style="display:none;">
+                <div class="final-confetti" id="final-confetti"></div>
+                <div class="final-container">
+                    <div class="final-header">
+                        <div class="final-trophy-anim">🏆</div>
+                        <h2>Kết quả chung cuộc</h2>
+                    </div>
+                    <div class="final-podium-wrapper" id="quiz-final-podium">
+                        <!-- Top 3 podium + full ranking render bởi JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         6. MÀN HÌNH NHIỆM VỤ VỀ NHÀ (HỌC SINH)
+         - Tổ đang trình bày → thông báo
+         - Tổ trưởng tổ khác → form đánh giá
+         - Thành viên → chờ tổ trưởng đánh giá
+         - Bảng kết quả (sau khi GV cho điểm)
+    ============================================= -->
+    <section id="homework-screen" class="screen">
+        <div class="homework-wrapper">
+            <!-- Header -->
+            <div class="hw-topbar">
+                <div class="hw-topbar-left">
+                    <span class="group-badge hw-team-badge" id="hw-student-team">Tổ 1</span>
+                    <span class="hw-role-badge" id="hw-role-badge">Thành viên</span>
+                </div>
+                <div class="hw-topbar-center">
+                    <span id="hw-presenting-label">Đang chờ...</span>
+                </div>
+                <div class="hw-topbar-right">
+                    <span class="hw-student-name" id="hw-student-name">HS</span>
+                </div>
+            </div>
+
+            <!-- Nội dung: Tổ mình đang trình bày -->
+            <div class="hw-presenting-own glass-card" id="hw-presenting-own" style="display:none;">
+                <div class="hw-presenting-icon">🎤</div>
+                <h3>Tổ bạn đang trình bày!</h3>
+                <p>Hãy lên bảng trình bày sản phẩm nhiệm vụ về nhà của tổ bạn.</p>
+            </div>
+
+            <!-- Nội dung: Tổ trưởng đánh giá tổ khác -->
+            <div class="hw-leader-eval glass-card" id="hw-leader-eval" style="display:none;">
+                <h3><i class="fas fa-star" style="color:#ffd700"></i> Đánh giá <span id="hw-eval-target-name">Tổ 2</span></h3>
+                <p class="hw-eval-task" id="hw-eval-task-desc">Nhiệm vụ: ...</p>
+                <div class="hw-eval-row">
+                    <label>Điểm (1-10):</label>
+                    <input type="range" id="hw-eval-score" min="1" max="10" value="7" step="0.5">
+                    <span class="hw-score-num" id="hw-score-display">7</span>
+                </div>
+                <div class="form-group">
+                    <textarea id="hw-eval-comment" rows="3" placeholder="Nhận xét về sản phẩm..."></textarea>
+                </div>
+                <button class="btn-primary" id="btn-hw-submit-eval">
+                    <i class="fas fa-paper-plane"></i> Gửi đánh giá
+                </button>
+                <div class="hw-eval-submitted" id="hw-eval-submitted" style="display:none;">
+                    <i class="fas fa-check-circle"></i> Đã gửi đánh giá!
+                </div>
+            </div>
+
+            <!-- Nội dung: Thành viên chờ -->
+            <div class="hw-member-waiting glass-card" id="hw-member-waiting" style="display:none;">
+                <div class="hw-member-info-icon">👀</div>
+                <p class="hw-member-info-text">Tổ trưởng đang đánh giá. Bạn có thể theo dõi kết quả bên dưới.</p>
+            </div>
+
+            <!-- Bảng kết quả đánh giá -->
+            <div class="hw-results-panel glass-card" id="hw-results-panel" style="display:none;">
+                <h3><i class="fas fa-table"></i> Kết quả đánh giá</h3>
+                <div class="hw-matrix-scroll" id="hw-student-matrix">
+                    <!-- Render bảng điểm -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         COUNTDOWN 3-2-1 OVERLAY (HS)
+    ============================================= -->
+    <div class="activity-countdown-overlay" id="activity-countdown-overlay" style="display:none;">
+        <div class="acd-content">
+            <div class="acd-activity-name" id="acd-activity-name">💬 Thảo luận nhóm</div>
+            <div class="acd-activity-title" id="acd-activity-title"></div>
+            <div class="acd-number" id="acd-number">3</div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         START STEP OVERLAY (GV - Online/Offline)
+    ============================================= -->
+    <div class="start-step-overlay" id="start-step-overlay" style="display:none;">
+        <div class="glass-card start-step-card">
+            <h3 id="start-step-title">Bắt đầu hoạt động</h3>
+            <div class="online-status-grid" id="start-step-groups"></div>
+            <div class="online-summary" id="start-step-summary">0/18 nhóm online</div>
+            <div class="start-step-actions">
+                <button class="btn-primary" id="btn-start-step-now"><i class="fas fa-play"></i> Bắt đầu ngay</button>
+                <button class="btn-danger" id="btn-start-step-cancel"><i class="fas fa-times"></i> Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         STEP REVIEW OVERLAY (GV - Xem kết quả hoạt động)
+    ============================================= -->
+    <div class="step-review-overlay" id="step-review-overlay" style="display:none;">
+        <div class="glass-card step-review-card">
+            <div class="step-review-header">
+                <h3 id="step-review-title"><i class="fas fa-clipboard-check"></i> Kết quả hoạt động</h3>
+                <button class="btn-icon" id="btn-close-step-review" title="Đóng">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="step-review-body" id="step-review-body">
+                <!-- Render bởi JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         FILE PREVIEW MODAL
+    ============================================= -->
+    <div class="file-preview-modal" id="file-preview-modal" style="display:none;">
+        <div class="fpm-overlay" onclick="closeFilePreview()"></div>
+        <div class="fpm-container glass-card">
+            <div class="fpm-header">
+                <div class="fpm-title">
+                    <i class="fas fa-file-alt"></i>
+                    <span id="fpm-title-text">Xem trước file</span>
+                </div>
+                <div class="fpm-actions">
+                    <a class="fpm-download-btn" id="fpm-download-btn" download>
+                        <i class="fas fa-download"></i> Tải xuống
+                    </a>
+                    <button class="btn-icon" onclick="closeFilePreview()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="fpm-body" id="fpm-body"></div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         FIREBASE SDK (compat v9)
+    ============================================= -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    
+    <!-- App Script -->
+    <script src="app.js"></script>
+</body>
+</html>
