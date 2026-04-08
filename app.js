@@ -62,6 +62,12 @@ const TEACHER_PASSWORD = 'admin@2025';
 const TOTAL_GROUPS = 18;
 const TEAM_COLORS = ['#667eea','#f5576c','#ffd700','#00d2ff','#38ef7d','#f093fb','#ff6b6b','#48dbfb','#ff9ff3'];
 
+// [FIX C3] Helper escape HTML — chống XSS khi chèn user data vào innerHTML
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 /* === 3. UI MODULE === */
 function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -285,7 +291,9 @@ function loginTeacher() {
 function restoreSession() {
     const s = safeGetItem('session');
     if (!s) return;
-    const data = JSON.parse(s);
+    // [FIX C4] Wrap JSON.parse trong try/catch — tránh crash nếu localStorage bị corrupt
+    let data;
+    try { data = JSON.parse(s); } catch(_e) { safeRemoveItem('session'); return; }
     STATE.roomId = data.room;
     if (data.role === 'student') {
         STATE.role = 'student'; STATE.studentName = data.name; STATE.groupNumber = data.group;
@@ -846,7 +854,7 @@ function loadDiscQuestions() {
             const hasImage = q.imageData ? '<i class="fas fa-image" style="color:var(--primary);margin-left:6px;" title="Có hình ảnh"></i>' : '';
             const div = document.createElement('div');
             div.className = 'saved-q-item';
-            div.innerHTML = `<div class="sq-content"><div class="sq-title">${q.title}${hasImage}</div><div class="sq-meta">⏱ ${formatTime(q.timeLimit)}</div></div><div class="sq-actions"><button class="sq-action-btn edit" onclick="editDiscQ('${k}')"><i class="fas fa-edit"></i></button><button class="sq-action-btn delete" onclick="deleteDiscQ('${k}')"><i class="fas fa-trash"></i></button></div>`;
+            div.innerHTML = `<div class="sq-content"><div class="sq-title">${escapeHtml(q.title)}${hasImage}</div><div class="sq-meta">⏱ ${formatTime(q.timeLimit)}</div></div><div class="sq-actions"><button class="sq-action-btn edit" onclick="editDiscQ('${k}')"><i class="fas fa-edit"></i></button><button class="sq-action-btn delete" onclick="deleteDiscQ('${k}')"><i class="fas fa-trash"></i></button></div>`;
             list.appendChild(div);
             const opt = document.createElement('option');
             opt.value = k; opt.textContent = q.title + (q.imageData ? ' 🖼️' : '');
@@ -998,8 +1006,8 @@ function loadQuizQuestions() {
         list.innerHTML = ''; checklist.innerHTML = '';
         keys.forEach((k, i) => {
             const q = qs[k];
-            list.innerHTML += `<div class="saved-q-item"><div class="sq-content"><div class="sq-title">${i+1}. ${(q.content||'').substring(0,60)}...</div><div class="sq-meta"><span class="qc-type">${typeLabels[q.type]||q.type}</span> ⏱${q.timeLimit}s 🏆${q.points}đ</div></div><div class="sq-actions"><button class="sq-action-btn edit" onclick="editQuizQ('${k}')"><i class="fas fa-edit"></i></button><button class="sq-action-btn delete" onclick="deleteQuizQ('${k}')"><i class="fas fa-trash"></i></button></div></div>`;
-            checklist.innerHTML += `<label class="quiz-check-item"><input type="checkbox" value="${k}" onchange="updateQuizSelection()"><span>${i+1}. ${(q.content||'').substring(0,50)}</span><span class="qc-type">${typeLabels[q.type]||q.type}</span></label>`;
+            list.innerHTML += `<div class="saved-q-item"><div class="sq-content"><div class="sq-title">${i+1}. ${escapeHtml((q.content||'').substring(0,60))}...</div><div class="sq-meta"><span class="qc-type">${typeLabels[q.type]||q.type}</span> ⏱${q.timeLimit}s 🏆${q.points}đ</div></div><div class="sq-actions"><button class="sq-action-btn edit" onclick="editQuizQ('${k}')"><i class="fas fa-edit"></i></button><button class="sq-action-btn delete" onclick="deleteQuizQ('${k}')"><i class="fas fa-trash"></i></button></div></div>`;
+            checklist.innerHTML += `<label class="quiz-check-item"><input type="checkbox" value="${k}" onchange="updateQuizSelection()"><span>${i+1}. ${escapeHtml((q.content||'').substring(0,50))}</span><span class="qc-type">${typeLabels[q.type]||q.type}</span></label>`;
         });
     });
 }
@@ -1064,7 +1072,7 @@ function initDiscussionTeacher() {
         if (!this.value) { preview.style.display = 'none'; return; }
         db.ref(`questionBank/discussion/${this.value}`).once('value', snap => {
             const q = snap.val();
-            if (q) { preview.style.display = 'block'; preview.innerHTML = `<strong>${q.title}</strong><br>${q.content}<br><small>⏱ ${formatTime(q.timeLimit)}</small>`; }
+            if (q) { preview.style.display = 'block'; preview.innerHTML = `<strong>${escapeHtml(q.title)}</strong><br>${escapeHtml(q.content)}<br><small>⏱ ${formatTime(q.timeLimit)}</small>`; }
         });
     });
     document.getElementById('btn-send-discussion').addEventListener('click', sendDiscussion);
@@ -1463,7 +1471,7 @@ function initDiscussionStudent() {
             const previewEl = document.getElementById('math-preview');
             if (previewEl) previewEl.style.display = 'none';
 
-            document.getElementById('disc-question-display').innerHTML = `<strong>${q.title || ''}</strong><br>${q.content}`;
+            document.getElementById('disc-question-display').innerHTML = `<strong>${escapeHtml(q.title)}</strong><br>${escapeHtml(q.content)}`;
             // Hiển hình ảnh nếu có
             const imgContainer = document.getElementById('disc-question-image');
             const imgEl = document.getElementById('disc-question-image-img');
@@ -1732,7 +1740,7 @@ function loadPeerAnswers() {
             const myCard = document.createElement('div');
             myCard.className = 'peer-answer-card';
             myCard.style.borderColor = 'var(--primary)';
-            myCard.innerHTML = `<div class="pa-group" style="color:var(--success)">📝 Nhóm ${STATE.groupNumber} (Nhóm bạn)</div><div class="pa-content">${myAnswer.content || ''}</div>`;
+            myCard.innerHTML = `<div class="pa-group" style="color:var(--success)">📝 Nhóm ${STATE.groupNumber} (Nhóm bạn)</div><div class="pa-content">${escapeHtml(myAnswer.content)}</div>`;
             list.appendChild(myCard);
         }
 
@@ -1798,7 +1806,7 @@ function loadPeerComments() {
         document.querySelectorAll('.peer-comments-list').forEach(el => el.innerHTML = '');
         Object.values(reviews).forEach(r => {
             const el = document.getElementById(`pc-list-${r.toGroup}`);
-            if (el) { el.innerHTML += `<div class="peer-comment-item"><span class="pc-from">${r.fromGroup}:</span> ${r.comment}</div>`; }
+            if (el) { el.innerHTML += `<div class="peer-comment-item"><span class="pc-from">${escapeHtml(r.fromGroup)}:</span> ${escapeHtml(r.comment)}</div>`; }
         });
     });
 }
@@ -1810,7 +1818,7 @@ function loadEvaluation() {
         const content = document.getElementById('evaluation-content');
         if (ev) {
             area.style.display = '';
-            content.innerHTML = `<div class="eval-stars">${'★'.repeat(ev.stars)}${'☆'.repeat(5 - ev.stars)}</div><div class="eval-text">${ev.comment || 'Không có nhận xét'}</div>`;
+            content.innerHTML = `<div class="eval-stars">${'★'.repeat(ev.stars)}${'☆'.repeat(5 - ev.stars)}</div><div class="eval-text">${escapeHtml(ev.comment) || 'Không có nhận xét'}</div>`;
         }
     });
 }
@@ -1871,7 +1879,7 @@ function sendQuizQuestion(index) {
     // Update teacher-specific counter badge (renamed to avoid duplicate ID)
     const teacherCounter = document.getElementById('teacher-quiz-question-counter');
     if (teacherCounter) teacherCounter.textContent = `Câu ${index + 1}/${STATE.quizQuestionsData.length}`;
-    document.getElementById('quiz-teacher-question').innerHTML = `<div class="quiz-question-text">${q.content}</div>`;
+    document.getElementById('quiz-teacher-question').innerHTML = `<div class="quiz-question-text">${escapeHtml(q.content)}</div>`;
     // Timer
     let remaining = q.timeLimit;
     clearInterval(STATE.timerInterval);
@@ -2889,7 +2897,7 @@ function showQuizFinalStudent() {
             .filter(([_, g]) => g.members && g.members.length > 0)
             .sort((a, b) => (b[1].score || 0) - (a[1].score || 0));
         const topScore = sorted[0] ? (sorted[0][1].score || 0) : 1;
-        const myRank = sorted.findIndex(([k]) => k === myKey) + 1;
+        // [FIX M2] Removed unused myRank variable (dead code)
         const medals = ['🥇', '🥈', '🥉'];
         const podiumHeights = ['120px', '90px', '65px'];
         const podiumColors = ['linear-gradient(180deg, #FFD700, #FFA500)', 'linear-gradient(180deg, #C0C0C0, #8C8C8C)', 'linear-gradient(180deg, #CD7F32, #8B5E3C)'];
@@ -3778,14 +3786,14 @@ function lpRenderActivityCards(lp) {
             db.ref(`questionBank/discussion/${s.questionId}`).once('value', qSnap => {
                 const q = qSnap.val();
                 const infoEl = document.getElementById(`lp-act-info-${i}`);
-                if (infoEl && q) infoEl.innerHTML = `<i class="fas fa-comments"></i> ${q.title}`;
+                if (infoEl && q) infoEl.innerHTML = `<i class="fas fa-comments"></i> ${escapeHtml(q.title)}`;
             });
         }
         if (s.type === 'homework' && s.homeworkId) {
             db.ref(`questionBank/homework/${s.homeworkId}`).once('value', hwSnap => {
                 const hw = hwSnap.val();
                 const infoEl = document.getElementById(`lp-act-hw-info-${i}`);
-                if (infoEl && hw) infoEl.innerHTML = `<i class="fas fa-home" style="color:#38ef7d"></i> ${hw.title}`;
+                if (infoEl && hw) infoEl.innerHTML = `<i class="fas fa-home" style="color:#38ef7d"></i> ${escapeHtml(hw.title)}`;
             });
         }
     }
@@ -3972,7 +3980,7 @@ function lpViewStepResult(stepIdx) {
         const title = document.getElementById('step-review-title');
         const body = document.getElementById('step-review-body');
 
-        title.innerHTML = `<i class="fas fa-clipboard-check"></i> Bước ${stepIdx + 1}: ${step.title || ''}`;
+        title.innerHTML = `<i class="fas fa-clipboard-check"></i> Bước ${stepIdx + 1}: ${escapeHtml(step.title)}`;
         body.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Đang tải...</div>';
         overlay.style.display = 'flex';
 
