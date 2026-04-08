@@ -3983,6 +3983,8 @@ function lpViewStepResult(stepIdx) {
             renderDiscussionReview(step, body);
         } else if (step.type === 'quiz') {
             renderQuizReview(step, body);
+        } else if (step.type === 'homework') {
+            renderHomeworkReview(step, body);
         } else {
             body.innerHTML = '<p class="empty-state"><i class="fas fa-check-circle"></i> Hoạt động tổng kết đã hoàn thành</p>';
         }
@@ -4118,6 +4120,139 @@ function renderQuizReview(step, body) {
 
         html += '</div>';
         body.innerHTML = html;
+    });
+}
+
+function renderHomeworkReview(step, body) {
+    const evals = step.homeworkEvals || {};
+    const homeworkId = step.homeworkId;
+
+    // Load teamConfig to get team names/colors
+    db.ref(`rooms/${STATE.roomId}/teamConfig`).once('value', tcSnap => {
+        const tc = tcSnap.val();
+        if (!tc || !tc.teams) {
+            body.innerHTML = '<p class="empty-state"><i class="fas fa-users"></i> Chưa cấu hình tổ nhóm</p>';
+            return;
+        }
+
+        const teamIds = Object.keys(tc.teams);
+
+        // Resolve team tasks from step data or bank
+        const resolveFromStep = () => {
+            // Try inline teamTasks first
+            const inlineTasks = (step.teamTasks || '').split('|').map(s => s.trim()).filter(Boolean);
+            if (inlineTasks.length > 0) return Promise.resolve(inlineTasks);
+
+            // Then try questionBank via homeworkId
+            if (homeworkId) {
+                return db.ref(`questionBank/homework/${homeworkId}`).once('value').then(snap => {
+                    const data = snap.val();
+                    return (data && data.teamTasks) ? data.teamTasks.split('|').map(s => s.trim()) : [];
+                });
+            }
+
+            // Last resort: latest bank entry
+            return db.ref('questionBank/homework').limitToLast(1).once('value').then(snap => {
+                const bank = snap.val() || {};
+                const key = Object.keys(bank)[0];
+                return (key && bank[key].teamTasks) ? bank[key].teamTasks.split('|').map(s => s.trim()) : [];
+            });
+        };
+
+        resolveFromStep().then(teamTasks => {
+            const evalCount = Object.keys(evals).length;
+
+            // Header card
+            let html = `<div class="sr-section">
+                <div class="sr-question-card">
+                    <div class="sr-q-label"><i class="fas fa-home" style="color:#f5af19"></i> Nhiệm vụ về nhà</div>
+                    <div class="sr-q-title">${step.title || 'Nhiệm vụ về nhà'}</div>
+                    <div class="sr-q-meta">
+                        <i class="fas fa-users"></i> ${teamIds.length} tổ &nbsp;|&nbsp;
+                        <i class="fas fa-star"></i> ${evalCount} tổ đã có đánh giá &nbsp;|&nbsp;
+                        <i class="fas fa-clock"></i> ${step.completedAt ? new Date(step.completedAt).toLocaleString('vi') : ''}
+                    </div>
+                </div>
+            </div>`;
+
+            // Team tasks overview
+            html += `<div class="sr-section">
+                <div class="sr-section-title"><i class="fas fa-clipboard-list"></i> Nhiệm vụ các tổ</div>
+                <div class="sr-hw-tasks">`;
+            teamIds.forEach((tid, idx) => {
+                const t = tc.teams[tid];
+                const task = teamTasks[idx] || '';
+                html += `<div class="sr-hw-task-item">
+                    <span class="hw-team-dot" style="background:${t.color}"></span>
+                    <strong>${t.name}:</strong>
+                    <span>${task || '<em style="opacity:0.4">(chưa gán)</em>'}</span>
+                </div>`;
+            });
+            html += '</div></div>';
+
+            // Score matrix
+            html += `<div class="sr-section">
+                <div class="sr-section-title"><i class="fas fa-table"></i> Bảng điểm đánh giá</div>
+                <div class="hw-matrix-scroll" id="sr-hw-matrix-container"></div>
+            </div>`;
+
+            // Per-team evaluation details
+            html += `<div class="sr-section">
+                <div class="sr-section-title"><i class="fas fa-comments"></i> Chi tiết đánh giá từng tổ</div>`;
+
+            if (evalCount === 0) {
+                html += '<p class="empty-state"><i class="fas fa-inbox"></i> Chưa có đánh giá nào</p>';
+            } else {
+                teamIds.forEach((tid, idx) => {
+                    const t = tc.teams[tid];
+                    const teamEval = evals[tid] || {};
+                    const evalEntries = Object.entries(teamEval);
+
+                    if (evalEntries.length === 0) {
+                        html += `<div class="sr-answer-item">
+                            <div class="sr-answer-header">
+                                <span class="sr-group-badge" style="background:${t.color}">${t.name}</span>
+                                <span class="sr-no-eval">⏳ Chưa có đánh giá</span>
+                            </div>
+                        </div>`;
+                        return;
+                    }
+
+                    let totalScore = 0, count = 0;
+                    let evalsHtml = '';
+                    evalEntries.forEach(([evalBy, ev]) => {
+                        const isTeacher = evalBy === 'teacher';
+                        const evalName = isTeacher ? '👑 Giáo viên' : (tc.teams[evalBy] ? tc.teams[evalBy].name : evalBy);
+                        const evalColor = isTeacher ? '#ffd700' : (tc.teams[evalBy] ? tc.teams[evalBy].color : '#888');
+                        evalsHtml += `<div class="sr-eval-detail">
+                            <span class="sr-eval-by" style="color:${evalColor}">${evalName}</span>
+                            <span class="sr-eval-score">${ev.score}/10</span>
+                            ${ev.comment ? `<span class="sr-eval-comment">${ev.comment}</span>` : ''}
+                        </div>`;
+                        totalScore += ev.score;
+                        count++;
+                    });
+
+                    const avg = count > 0 ? (totalScore / count).toFixed(2) : '--';
+                    html += `<div class="sr-answer-item">
+                        <div class="sr-answer-header">
+                            <span class="sr-group-badge" style="background:${t.color}">${t.name}</span>
+                            <span class="sr-eval-badge">Điểm TB: <strong>${avg}</strong></span>
+                        </div>
+                        <div class="sr-answer-content">${evalsHtml}</div>
+                    </div>`;
+                });
+            }
+            html += '</div>';
+
+            body.innerHTML = html;
+
+            // Render the matrix table into the container
+            const matrixContainer = document.getElementById('sr-hw-matrix-container');
+            if (matrixContainer) {
+                renderScoreMatrixTable(matrixContainer, tc, evals, teamIds, teamTasks);
+            }
+        });
     });
 }
 

@@ -4044,3 +4044,33 @@ body {
     display: flex; align-items: center; gap: 8px;
 }
 .sh-hw-header h3 i { font-size: 16px; }
+
+/* ===========================================================
+   HOMEWORK REVIEW (Teacher Step Review)
+   =========================================================== */
+.sr-hw-tasks {
+    display: flex; flex-direction: column; gap: 8px;
+}
+.sr-hw-task-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px; font-size: 14px;
+}
+.sr-hw-task-item strong { white-space: nowrap; }
+.sr-eval-detail {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px; margin-bottom: 4px;
+    font-size: 13px;
+}
+.sr-eval-by { font-weight: 600; min-width: 100px; }
+.sr-eval-score {
+    font-weight: 700; font-size: 14px;
+    padding: 2px 10px; border-radius: 20px;
+    background: rgba(255,255,255,0.08);
+}
+.sr-eval-comment {
+    opacity: 0.6; font-style: italic; flex: 1;
+}
