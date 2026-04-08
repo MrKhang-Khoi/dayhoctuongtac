@@ -424,9 +424,6 @@ function initStudentHome() {
                 if (currentScreen === 'homework-screen') {
                     db.ref(`rooms/${STATE.roomId}/homeworkState`).off();
                     db.ref(`rooms/${STATE.roomId}/homeworkEvals`).off();
-                    // Show homework tab if there are results
-                    const hwTabBtn = document.getElementById('sh-tab-homework-btn');
-                    if (hwTabBtn) hwTabBtn.style.display = '';
                 }
                 showScreen('student-home');
                 initStudentHome();
@@ -5187,9 +5184,7 @@ function showHomeworkResults() {
     db.ref(`rooms/${STATE.roomId}/homeworkState`).off();
     db.ref(`rooms/${STATE.roomId}/homeworkEvals`).off();
 
-    // Show the homework tab button in student-home
-    const hwTabBtn = document.getElementById('sh-tab-homework-btn');
-    if (hwTabBtn) hwTabBtn.style.display = '';
+
 
     // Load and render the final evaluation results into the homework tab
     db.ref(`rooms/${STATE.roomId}/teamConfig`).once('value', tcSnap => {
