@@ -346,6 +346,7 @@ function initStudentHome() {
         tab.classList.add('active');
         document.getElementById(tab.dataset.tab).classList.add('active');
         if (tab.dataset.tab === 'sh-tab-score') loadStudentScoreTab();
+        if (tab.dataset.tab === 'sh-tab-homework') loadHomeworkResultsTab();
     };
 
     // Logout button
@@ -416,7 +417,22 @@ function initStudentHome() {
                 else { showScreen('discussion-screen'); initDiscussionStudent(); }
             });
         } else if (st === 'lesson-waiting' || st === 'idle' || st === 'waiting' || !st) {
-            // Returned from activity — refresh history (debounced) [BUG 8]
+            // Returned from activity — go back to student-home if on an activity screen
+            const currentScreen = document.querySelector('.screen.active')?.id;
+            if (currentScreen && currentScreen !== 'student-home' && currentScreen !== 'student-lobby' && currentScreen !== 'student-name-screen') {
+                // Clean up homework listeners if coming from homework
+                if (currentScreen === 'homework-screen') {
+                    db.ref(`rooms/${STATE.roomId}/homeworkState`).off();
+                    db.ref(`rooms/${STATE.roomId}/homeworkEvals`).off();
+                    // Show homework tab if there are results
+                    const hwTabBtn = document.getElementById('sh-tab-homework-btn');
+                    if (hwTabBtn) hwTabBtn.style.display = '';
+                }
+                showScreen('student-home');
+                initStudentHome();
+                showToast('Hoạt động đã kết thúc! 🏠', 'info');
+            }
+            // Refresh history (debounced) [BUG 8]
             clearTimeout(STATE.loadHistoryTimeout);
             STATE.loadHistoryTimeout = setTimeout(() => loadStudentHistory(), 500);
         }
@@ -5032,9 +5048,68 @@ function initHomeworkStudent() {
 }
 
 function showHomeworkResults() {
-    document.getElementById('hw-presenting-own').style.display = 'none';
-    document.getElementById('hw-leader-eval').style.display = 'none';
-    document.getElementById('hw-member-waiting').style.display = 'none';
-    document.getElementById('hw-results-panel').style.display = '';
-    document.getElementById('hw-presenting-label').textContent = 'Hoạt động đã kết thúc';
+    // Clean up listeners
+    db.ref(`rooms/${STATE.roomId}/homeworkState`).off();
+    db.ref(`rooms/${STATE.roomId}/homeworkEvals`).off();
+
+    // Show the homework tab button in student-home
+    const hwTabBtn = document.getElementById('sh-tab-homework-btn');
+    if (hwTabBtn) hwTabBtn.style.display = '';
+
+    // Load and render the final evaluation results into the homework tab
+    db.ref(`rooms/${STATE.roomId}/teamConfig`).once('value', tcSnap => {
+        const tc = tcSnap.val();
+        if (!tc) return;
+        db.ref(`rooms/${STATE.roomId}/homeworkEvals`).once('value', evSnap => {
+            const evals = evSnap.val() || {};
+            renderScoreMatrix(tc, evals, 'sh-hw-matrix');
+        });
+    });
+
+    // Set homework title
+    db.ref(`rooms/${STATE.roomId}/homeworkState/title`).once('value', snap => {
+        const title = snap.val();
+        const titleEl = document.getElementById('sh-hw-title');
+        if (titleEl && title) titleEl.textContent = title;
+    });
+
+    // Navigate back to student-home
+    showScreen('student-home');
+    initStudentHome();
+    showToast('Hoạt động nhiệm vụ về nhà đã kết thúc! 🏠', 'info');
+
+    // Auto-switch to homework tab
+    setTimeout(() => {
+        const hwTab = document.querySelector('[data-tab="sh-tab-homework"]');
+        if (hwTab) hwTab.click();
+    }, 300);
+}
+
+// Load homework evaluation results into the student tab
+function loadHomeworkResultsTab() {
+    const container = document.getElementById('sh-hw-matrix');
+    if (!container) return;
+
+    db.ref(`rooms/${STATE.roomId}/teamConfig`).once('value', tcSnap => {
+        const tc = tcSnap.val();
+        if (!tc || !tc.teams) {
+            container.innerHTML = '<p class="empty-state"><i class="fas fa-clipboard-list"></i> Chưa có kết quả đánh giá nào.</p>';
+            return;
+        }
+        db.ref(`rooms/${STATE.roomId}/homeworkEvals`).once('value', evSnap => {
+            const evals = evSnap.val() || {};
+            if (Object.keys(evals).length === 0) {
+                container.innerHTML = '<p class="empty-state"><i class="fas fa-clipboard-list"></i> Chưa có kết quả đánh giá nào.</p>';
+                return;
+            }
+            renderScoreMatrix(tc, evals, 'sh-hw-matrix');
+        });
+    });
+
+    // Update title
+    db.ref(`rooms/${STATE.roomId}/homeworkState/title`).once('value', snap => {
+        const title = snap.val();
+        const el = document.getElementById('sh-hw-title');
+        if (el) el.textContent = title || '';
+    });
 }

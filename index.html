@@ -193,6 +193,9 @@
             <button class="sh-tab" data-tab="sh-tab-quiz">
                 <i class="fas fa-gamepad"></i> Trắc nghiệm
             </button>
+            <button class="sh-tab" data-tab="sh-tab-homework" id="sh-tab-homework-btn" style="display:none;">
+                <i class="fas fa-home"></i> NV về nhà
+            </button>
             <button class="sh-tab" data-tab="sh-tab-score">
                 <i class="fas fa-trophy"></i> Điểm số
             </button>
@@ -230,6 +233,19 @@
             <div class="sh-tab-panel" id="sh-tab-score">
                 <div id="sh-score-content">
                     <p class="empty-state"><i class="fas fa-trophy"></i> Chưa có điểm nào được ghi nhận.</p>
+                </div>
+            </div>
+
+            <!-- Tab: Nhiệm vụ về nhà (kết quả đánh giá) -->
+            <div class="sh-tab-panel" id="sh-tab-homework">
+                <div class="sh-hw-results">
+                    <div class="sh-hw-header">
+                        <h3><i class="fas fa-home" style="color:#f5af19"></i> Kết quả Nhiệm vụ về nhà</h3>
+                        <p id="sh-hw-title" style="opacity:0.6;font-size:13px;margin:4px 0 0;"></p>
+                    </div>
+                    <div class="hw-matrix-scroll" id="sh-hw-matrix">
+                        <p class="empty-state"><i class="fas fa-clipboard-list"></i> Chưa có kết quả đánh giá nào.</p>
+                    </div>
                 </div>
             </div>
 
