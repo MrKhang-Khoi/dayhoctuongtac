@@ -853,30 +853,57 @@
                         </div>
                     </div>
 
-                    <!-- Split: Ranking + History -->
-                    <div class="td-split results-split">
-                        <div class="td-split-left">
-                            <div class="glass-card">
-                                <h3><i class="fas fa-trophy" style="color:#ffd700"></i> Bảng xếp hạng thảo luận</h3>
+                    <!-- === KẾT QUẢ 3 MỤC: Thảo luận / Trắc nghiệm / Bài tập về nhà === -->
+
+                    <!-- 1. Thảo luận -->
+                    <div class="glass-card mt-20">
+                        <div class="results-section-header">
+                            <h3><i class="fas fa-comments" style="color:#667eea"></i> Kết quả Thảo luận</h3>
+                        </div>
+                        <div class="td-split results-split">
+                            <div class="td-split-left">
+                                <h4 style="margin:0 0 10px;color:rgba(255,255,255,0.7);font-size:13px;"><i class="fas fa-trophy" style="color:#ffd700"></i> Bảng xếp hạng</h4>
                                 <div class="ranking-list" id="disc-ranking-list">
                                     <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có đánh giá</p>
                                 </div>
                             </div>
-                        </div>
-                        <div class="td-split-right">
-                            <div class="glass-card">
-                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-                                    <h3 style="margin:0;"><i class="fas fa-history"></i> Lịch sử phiên học</h3>
-                                    <select id="history-filter" style="width:auto;padding:6px 12px;font-size:12px;">
-                                        <option value="all">Tất cả</option>
-                                        <option value="discussion">Thảo luận</option>
-                                        <option value="quiz">Trắc nghiệm</option>
-                                    </select>
+                            <div class="td-split-right">
+                                <h4 style="margin:0 0 10px;color:rgba(255,255,255,0.7);font-size:13px;"><i class="fas fa-inbox" style="color:#4facfe"></i> Câu trả lời nhóm</h4>
+                                <div id="results-disc-answers">
+                                    <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có câu trả lời</p>
                                 </div>
-                                <div id="session-history-list">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Trắc nghiệm -->
+                    <div class="glass-card mt-20">
+                        <div class="results-section-header">
+                            <h3><i class="fas fa-gamepad" style="color:var(--quiz-yellow)"></i> Kết quả Trắc nghiệm</h3>
+                        </div>
+                        <div class="td-split results-split">
+                            <div class="td-split-left">
+                                <h4 style="margin:0 0 10px;color:rgba(255,255,255,0.7);font-size:13px;"><i class="fas fa-trophy" style="color:#ffd700"></i> Bảng xếp hạng nhóm</h4>
+                                <div id="results-quiz-ranking">
                                     <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có dữ liệu</p>
                                 </div>
                             </div>
+                            <div class="td-split-right">
+                                <h4 style="margin:0 0 10px;color:rgba(255,255,255,0.7);font-size:13px;"><i class="fas fa-chart-bar" style="color:#f5576c"></i> Chi tiết từng câu</h4>
+                                <div id="results-quiz-detail">
+                                    <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có dữ liệu</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Bài tập về nhà -->
+                    <div class="glass-card mt-20">
+                        <div class="results-section-header">
+                            <h3><i class="fas fa-home" style="color:#38ef7d"></i> Kết quả Bài tập về nhà</h3>
+                        </div>
+                        <div id="results-homework-content">
+                            <p class="empty-state"><i class="fas fa-inbox"></i> Chưa có dữ liệu</p>
                         </div>
                     </div>
                 </div><!-- /#panel-results -->

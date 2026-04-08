@@ -593,7 +593,7 @@ function initTeacherDashboard() {
     initResetRoom();
     initTimerControls();
     initSoundToggle();
-    initSessionHistory();
+    initResultsPanel();
     initExportExcel();
     initDiscussionRanking();
     initTeamManager();
@@ -3247,44 +3247,142 @@ function saveQuizSessionHistory() {
     });
 }
 
-function initSessionHistory() {
-    const filterEl = document.getElementById('history-filter');
-    if (filterEl) {
-        filterEl.addEventListener('change', loadSessionHistory);
-    }
-    loadSessionHistory();
-}
-
-function loadSessionHistory() {
-    const filter = document.getElementById('history-filter');
-    const filterVal = filter ? filter.value : 'all';
-    // [FIX B5] Gỡ listener cũ trước khi gắn mới — tránh listener tích lũy
-    db.ref('sessionHistory').off();
-    db.ref('sessionHistory').orderByChild('timestamp').limitToLast(50).on('value', snap => {
-        const sessions = snap.val() || {};
-        const list = document.getElementById('session-history-list');
-        const keys = Object.keys(sessions).reverse();
-        const filtered = keys.filter(k => filterVal === 'all' || sessions[k].type === filterVal);
-        if (filtered.length === 0) {
-            list.innerHTML = '<p class="empty-state"><i class="fas fa-inbox"></i> Chưa có dữ liệu</p>';
+function initResultsPanel() {
+    // === 1. Kết quả thảo luận: câu trả lời từng nhóm ===
+    db.ref(`rooms/${STATE.roomId}/answers`).on('value', aSnap => {
+        const answers = aSnap.val() || {};
+        const container = document.getElementById('results-disc-answers');
+        if (!container) return;
+        const keys = Object.keys(answers).filter(k => {
+            const a = answers[k];
+            return a && (a.content || a.submittedAt);
+        });
+        if (keys.length === 0) {
+            container.innerHTML = '<p class="empty-state"><i class="fas fa-inbox"></i> Chưa có câu trả lời</p>';
             return;
         }
-        list.innerHTML = '';
-        filtered.forEach(k => {
-            const s = sessions[k];
-            const date = new Date(s.timestamp).toLocaleString('vi');
-            list.innerHTML += `<div class="history-item">
-                <div class="history-header">
-                    <span class="history-type ${s.type}">${s.type === 'discussion' ? '💬 Thảo luận' : '🎯 Trắc nghiệm'}</span>
-                    <span class="history-date">${date}</span>
+        db.ref(`rooms/${STATE.roomId}/evaluations`).once('value', evSnap => {
+            const evals = evSnap.val() || {};
+            let html = '';
+            keys.sort().forEach(gName => {
+                const a = answers[gName];
+                const ev = evals[gName];
+                const groupNum = gName.replace('nhom-', 'Nhóm ');
+                const stars = ev ? '★'.repeat(ev.stars || 0) + '☆'.repeat(5 - (ev.stars || 0)) : '<span style="color:rgba(255,255,255,0.3)">Chưa đánh giá</span>';
+                const evalComment = ev ? escapeHtml(ev.comment || '') : '';
+                html += `<div class="result-answer-card">
+                    <div class="rac-header">
+                        <span class="rac-group">${groupNum}</span>
+                        <span class="rac-stars">${stars}</span>
+                    </div>
+                    <div class="rac-content">${escapeHtml(a.content || '')}</div>
+                    ${evalComment ? `<div class="rac-eval"><i class="fas fa-comment-dots"></i> ${evalComment}</div>` : ''}
+                    <div class="rac-meta">${a.submittedBy || ''} — ${a.submittedAt ? new Date(a.submittedAt).toLocaleTimeString('vi') : ''}</div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        });
+    });
+
+    // === 2. Kết quả trắc nghiệm: ranking + chi tiết ===
+    db.ref(`rooms/${STATE.roomId}/groups`).on('value', gSnap => {
+        const groups = gSnap.val() || {};
+        const rankContainer = document.getElementById('results-quiz-ranking');
+        if (!rankContainer) return;
+        const sorted = Object.entries(groups)
+            .filter(([_, g]) => g && g.members && g.members.length > 0 && (g.score !== undefined))
+            .sort((a, b) => (b[1].score || 0) - (a[1].score || 0));
+        if (sorted.length === 0 || sorted.every(([_, g]) => (g.score || 0) === 0)) {
+            rankContainer.innerHTML = '<p class="empty-state"><i class="fas fa-inbox"></i> Chưa có dữ liệu trắc nghiệm</p>';
+        } else {
+            const medals = ['🥇', '🥈', '🥉'];
+            let html = '';
+            sorted.forEach(([key, g], i) => {
+                const medal = medals[i] || `#${i + 1}`;
+                const pct = Math.round(((g.score || 0) / Math.max(sorted[0][1].score || 1, 1)) * 100);
+                html += `<div class="quiz-rank-item">
+                    <span class="qri-medal">${medal}</span>
+                    <div class="qri-info">
+                        <span class="qri-name">${key.replace('nhom-', 'Nhóm ')} — ${escapeHtml(g.members[0] || '')}</span>
+                        <div class="qri-bar-bg"><div class="qri-bar" style="width:${pct}%"></div></div>
+                    </div>
+                    <span class="qri-score">${g.score || 0}đ</span>
+                </div>`;
+            });
+            rankContainer.innerHTML = html;
+        }
+    });
+
+    // Chi tiết từng câu quiz
+    db.ref(`rooms/${STATE.roomId}/quizAnswers`).on('value', qaSnap => {
+        const quizAnswers = qaSnap.val() || {};
+        const detailContainer = document.getElementById('results-quiz-detail');
+        if (!detailContainer) return;
+        const qIds = Object.keys(quizAnswers);
+        if (qIds.length === 0) {
+            detailContainer.innerHTML = '<p class="empty-state"><i class="fas fa-inbox"></i> Chưa có dữ liệu</p>';
+            return;
+        }
+        let html = '';
+        qIds.forEach((qId, idx) => {
+            const answers = quizAnswers[qId];
+            const groups = Object.keys(answers);
+            const correctCount = groups.filter(g => answers[g] && answers[g].correct).length;
+            const totalCount = groups.length;
+            const pct = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+            const barColor = pct >= 70 ? '#38ef7d' : pct >= 40 ? '#ffd700' : '#f5576c';
+            html += `<div class="quiz-detail-item">
+                <div class="qdi-header">
+                    <span class="qdi-num">Câu ${idx + 1}</span>
+                    <span class="qdi-ratio" style="color:${barColor}">${correctCount}/${totalCount} đúng (${pct}%)</span>
                 </div>
-                <div class="history-title">${s.question}</div>
-                <div class="history-details">
-                    <span><i class="fas fa-users"></i> ${s.answerCount || 0} nhóm</span>
-                    ${s.evalCount ? `<span><i class="fas fa-star"></i> ${s.evalCount} đánh giá</span>` : ''}
-                </div>
+                <div class="qdi-bar-bg"><div class="qdi-bar" style="width:${pct}%;background:${barColor}"></div></div>
+                <div class="qdi-groups">${groups.map(g => {
+                    const a = answers[g];
+                    const icon = a.correct ? '✅' : '❌';
+                    return `<span class="qdi-group ${a.correct ? 'correct' : 'wrong'}">${icon} ${g.replace('nhom-', 'N')}</span>`;
+                }).join('')}</div>
             </div>`;
         });
+        detailContainer.innerHTML = html;
+    });
+
+    // === 3. Kết quả bài tập về nhà ===
+    db.ref(`rooms/${STATE.roomId}/homeworkEvals`).on('value', snap => {
+        const hwEvals = snap.val() || {};
+        const container = document.getElementById('results-homework-content');
+        if (!container) return;
+        const teams = Object.keys(hwEvals);
+        if (teams.length === 0) {
+            container.innerHTML = '<p class="empty-state"><i class="fas fa-inbox"></i> Chưa có đánh giá bài tập</p>';
+            return;
+        }
+        let html = '<div class="hw-results-grid">';
+        teams.forEach(teamKey => {
+            const teamEval = hwEvals[teamKey];
+            const teacherE = teamEval.teacher;
+            const peerEvals = Object.entries(teamEval).filter(([k]) => k !== 'teacher');
+            const teamName = teamKey.replace('to-', 'Tổ ');
+            html += `<div class="hw-result-card">
+                <div class="hwrc-header"><i class="fas fa-layer-group"></i> ${escapeHtml(teamName)}</div>`;
+            if (teacherE) {
+                html += `<div class="hwrc-eval teacher-eval">
+                    <span class="hwrc-from"><i class="fas fa-chalkboard-teacher"></i> Giáo viên</span>
+                    <span class="hwrc-stars">${'★'.repeat(teacherE.stars || 0)}${'☆'.repeat(5 - (teacherE.stars || 0))}</span>
+                    <span class="hwrc-comment">${escapeHtml(teacherE.comment || '')}</span>
+                </div>`;
+            }
+            peerEvals.forEach(([fromTeam, pe]) => {
+                html += `<div class="hwrc-eval peer-eval">
+                    <span class="hwrc-from"><i class="fas fa-users"></i> ${fromTeam.replace('to-', 'Tổ ')}</span>
+                    <span class="hwrc-stars">${'★'.repeat(pe.stars || 0)}${'☆'.repeat(5 - (pe.stars || 0))}</span>
+                    <span class="hwrc-comment">${escapeHtml(pe.comment || '')}</span>
+                </div>`;
+            });
+            html += '</div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
     });
 }
 
@@ -3564,20 +3662,26 @@ function initHomeworkBank() {
         });
     }
 
-    // Save homework task
+    // Save homework task (hỗ trợ cả tạo mới + cập nhật)
     document.getElementById('btn-save-hw-task').addEventListener('click', () => {
         const title = document.getElementById('hw-task-title').value.trim();
         if (!title) { showToast('Nhập tiêu đề nhiệm vụ!', 'error'); return; }
         const taskInputs = document.querySelectorAll('.hw-bank-task-input');
         if (taskInputs.length === 0) { showToast('Chưa có cấu hình tổ!', 'error'); return; }
         const teamTasks = [...taskInputs].map(inp => inp.value.trim());
-        const id = 'hw-' + Date.now().toString(36);
+        // Nếu đang edit → update, nếu không → tạo mới
+        const id = STATE._editingHomeworkId || ('hw-' + Date.now().toString(36));
+        const isEdit = !!STATE._editingHomeworkId;
         db.ref(`questionBank/homework/${id}`).set({
             title, teamTasks: teamTasks.join('|'), createdAt: Date.now()
         });
-        showToast('Đã lưu nhiệm vụ!', 'success');
+        showToast(isEdit ? 'Đã cập nhật nhiệm vụ!' : 'Đã lưu nhiệm vụ!', 'success');
+        // Reset form
         document.getElementById('hw-task-title').value = '';
         taskInputs.forEach(inp => inp.value = '');
+        STATE._editingHomeworkId = null;
+        const saveBtn = document.getElementById('btn-save-hw-task');
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Lưu nhiệm vụ';
     });
 
     // Load and display saved homework tasks
@@ -3591,12 +3695,15 @@ function initHomeworkBank() {
         list.innerHTML = Object.entries(tasks).map(([id, t]) => {
             const taskArr = (t.teamTasks || '').split('|').filter(Boolean);
             const taskPreview = taskArr.length > 0
-                ? taskArr.map((tk, i) => `<span class="hw-saved-task-item">Tổ ${i+1}: ${tk}</span>`).join('')
+                ? taskArr.map((tk, i) => `<span class="hw-saved-task-item">Tổ ${i+1}: ${escapeHtml(tk)}</span>`).join('')
                 : '<span style="color:rgba(255,255,255,0.3)">Chưa gán nhiệm vụ tổ</span>';
             return `<div class="saved-question-item">
                 <div class="sq-header">
-                    <span class="sq-title"><i class="fas fa-home" style="color:#38ef7d"></i> ${t.title}</span>
-                    <button class="tool-btn mini danger" onclick="deleteHomeworkTask('${id}')" title="Xóa"><i class="fas fa-trash"></i></button>
+                    <span class="sq-title"><i class="fas fa-home" style="color:#38ef7d"></i> ${escapeHtml(t.title)}</span>
+                    <div class="sq-actions">
+                        <button class="tool-btn mini" onclick="editHomeworkTask('${id}')" title="Sửa"><i class="fas fa-edit"></i></button>
+                        <button class="tool-btn mini danger" onclick="deleteHomeworkTask('${id}')" title="Xóa"><i class="fas fa-trash"></i></button>
+                    </div>
                 </div>
                 <div class="hw-saved-tasks">${taskPreview}</div>
             </div>`;
@@ -3608,6 +3715,28 @@ function deleteHomeworkTask(id) {
     if (!confirm('Xóa nhiệm vụ này?')) return;
     db.ref(`questionBank/homework/${id}`).remove();
     showToast('Đã xóa nhiệm vụ', 'info');
+}
+
+// [NEW] Edit homework task — load data vào form để sửa
+function editHomeworkTask(id) {
+    db.ref(`questionBank/homework/${id}`).once('value', snap => {
+        const task = snap.val();
+        if (!task) { showToast('Nhiệm vụ không tồn tại!', 'error'); return; }
+        // Điền title
+        document.getElementById('hw-task-title').value = task.title || '';
+        // Điền teamTasks vào các input
+        const taskArr = (task.teamTasks || '').split('|');
+        const inputs = document.querySelectorAll('.hw-bank-task-input');
+        inputs.forEach((inp, i) => { inp.value = taskArr[i] || ''; });
+        // Lưu ID đang edit vào STATE
+        STATE._editingHomeworkId = id;
+        // Đổi text nút Save
+        const saveBtn = document.getElementById('btn-save-hw-task');
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Cập nhật nhiệm vụ';
+        // Scroll vào form
+        document.getElementById('hw-task-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showToast('Đang sửa nhiệm vụ — nhấn Cập nhật để lưu', 'info');
+    });
 }
 
 function lpUpdateQuizSelection(stepId) {
