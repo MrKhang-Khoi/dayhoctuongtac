@@ -4693,26 +4693,42 @@ function cleanupStudentListeners() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    initLogin();
-    restoreSession();
-    // [FIX B12] Chỉ lắng nghe quizState khi đã có role, tránh listener thừa
-    // Quiz question counter sẽ được cập nhật trong initQuizStudent/initQuizTeacher tương ứng
-    // Giữ listener nhẹ — chỉ update nếu element tồn tại
-    db.ref(`rooms/${STATE.roomId}/quizState`).on('value', snap => {
-        const qs = snap.val();
-        if (!qs) return;
-        // Chỉ update element nào tồn tại trên DOM hiện tại (tùy role)
-        const text = `Câu ${(qs.currentIndex || 0) + 1}/${qs.total || 0}`;
-        const teacherEl = document.getElementById('teacher-quiz-question-counter');
-        const studentEl = document.getElementById('quiz-question-counter');
-        if (STATE.role === 'teacher' && teacherEl) teacherEl.textContent = text;
-        else if (STATE.role === 'student' && studentEl) studentEl.textContent = text;
-    });
-    // [FIX BUG-09] HS: Lắng nghe countdown — chỉ gọi khi đã đăng nhập (trong loginStudent/restoreSession)
-    // initStudentCountdownListener(); // Đã chuyển vào loginStudent() và restoreSession()
-    // [FIX BUG-10] Lesson Plan Engine — chỉ gọi theo role
-    // initLessonPlanBuilder(); // Đã chuyển vào initTeacherDashboard()
-    // initStudentLessonListener(); // Đã chuyển vào loginStudent() và restoreSession()
+    // [FIX] Anonymous auth — Firebase Security Rules yêu cầu auth != null
+    // Phải đăng nhập ẩn danh trước khi đọc/ghi database
+    firebase.auth().signInAnonymously()
+        .then(() => {
+            console.log('[Auth] Anonymous sign-in OK');
+            _initApp();
+        })
+        .catch(err => {
+            console.error('[Auth] Anonymous sign-in FAILED:', err);
+            // Fallback: vẫn cố khởi động app (DB có thể hoạt động nếu rules cho phép public)
+            showToast('Kết nối xác thực thất bại. Một số tính năng có thể không hoạt động.', 'error');
+            _initApp();
+        });
+
+    function _initApp() {
+        initLogin();
+        restoreSession();
+        // [FIX B12] Chỉ lắng nghe quizState khi đã có role, tránh listener thừa
+        // Quiz question counter sẽ được cập nhật trong initQuizStudent/initQuizTeacher tương ứng
+        // Giữ listener nhẹ — chỉ update nếu element tồn tại
+        db.ref(`rooms/${STATE.roomId}/quizState`).on('value', snap => {
+            const qs = snap.val();
+            if (!qs) return;
+            // Chỉ update element nào tồn tại trên DOM hiện tại (tùy role)
+            const text = `Câu ${(qs.currentIndex || 0) + 1}/${qs.total || 0}`;
+            const teacherEl = document.getElementById('teacher-quiz-question-counter');
+            const studentEl = document.getElementById('quiz-question-counter');
+            if (STATE.role === 'teacher' && teacherEl) teacherEl.textContent = text;
+            else if (STATE.role === 'student' && studentEl) studentEl.textContent = text;
+        });
+        // [FIX BUG-09] HS: Lắng nghe countdown — chỉ gọi khi đã đăng nhập (trong loginStudent/restoreSession)
+        // initStudentCountdownListener(); // Đã chuyển vào loginStudent() và restoreSession()
+        // [FIX BUG-10] Lesson Plan Engine — chỉ gọi theo role
+        // initLessonPlanBuilder(); // Đã chuyển vào initTeacherDashboard()
+        // initStudentLessonListener(); // Đã chuyển vào loginStudent() và restoreSession()
+    }
 });
 
 /* ===========================================================
