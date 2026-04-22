@@ -1,7 +1,9 @@
 node_modules/
+.agent/
 package.json
 package-lock.json
 .jshintrc
+eslint.config.mjs
 _audit.js
 audit_output.txt
 eslint_output.txt
