@@ -4615,18 +4615,48 @@ function showStartStepConfirm(title, callback) {
     };
 }
 
-/* Gửi countdown 3-2-1 qua Firebase, sau 3.5s gọi callback */
+/* Gửi countdown 3-2-1 qua Firebase + hiện overlay cho GV */
 function startActivityCountdown(title, callback) {
+    // Gửi signal cho HS
     db.ref(`rooms/${STATE.roomId}/countdown`).set({
         active: true,
         title: title,
         startedAt: Date.now()
     });
-    // GV đợi 4.2 giây (HS đếm 3-2-1 + buffer cho Firebase latency) [BUG 10]
-    setTimeout(() => {
-        db.ref(`rooms/${STATE.roomId}/countdown`).remove();
-        callback();
-    }, 4200);
+
+    // [FIX] Hiện countdown 3-2-1 cho GV luôn (trước đây GV phải chờ 4.2s trống)
+    const overlay = document.getElementById('activity-countdown-overlay');
+    const nameEl = document.getElementById('acd-activity-name');
+    const numEl = document.getElementById('acd-number');
+    nameEl.textContent = title || 'Hoạt động tiếp theo';
+    overlay.style.display = '';
+    let count = 3;
+    numEl.textContent = count;
+    numEl.style.animation = 'none';
+    void numEl.offsetHeight;
+    numEl.style.animation = 'countdownPulse 0.8s ease';
+
+    clearInterval(STATE.countdownInterval);
+    STATE.countdownInterval = setInterval(() => {
+        count--;
+        if (count > 0) {
+            numEl.textContent = count;
+            numEl.style.animation = 'none';
+            void numEl.offsetHeight;
+            numEl.style.animation = 'countdownPulse 0.8s ease';
+        } else {
+            numEl.textContent = '🚀';
+            numEl.style.animation = 'none';
+            void numEl.offsetHeight;
+            numEl.style.animation = 'countdownPulse 0.8s ease';
+            clearInterval(STATE.countdownInterval);
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                db.ref(`rooms/${STATE.roomId}/countdown`).remove();
+                callback();
+            }, 700);
+        }
+    }, 1000);
 }
 
 /* HS: Lắng nghe countdown signal từ GV */
