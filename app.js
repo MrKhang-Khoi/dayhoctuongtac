@@ -827,6 +827,24 @@ function editDiscQ(id) {
         document.getElementById('disc-q-title').value = q.title;
         document.getElementById('disc-q-content').value = q.content;
         STATE.editingDiscQId = id;
+        // [FIX BUG-SAVE] Khôi phục timeLimit lên UI — trước đây bị mất khi sửa
+        const timeLimit = q.timeLimit || 180;
+        const presetTimes = [60, 120, 180, 300, 600]; // 1,2,3,5,10 phút
+        const matchPreset = presetTimes.includes(timeLimit);
+        document.querySelectorAll('.time-btn').forEach(b => {
+            b.classList.remove('active');
+            if (matchPreset && parseInt(b.dataset.time) === timeLimit) {
+                b.classList.add('active');
+            }
+        });
+        if (matchPreset) {
+            STATE.selectedTimeDisc = timeLimit;
+            document.getElementById('disc-custom-time').value = '';
+        } else {
+            // Thời gian custom → điền vào ô custom (đơn vị giây)
+            STATE.selectedTimeDisc = timeLimit;
+            document.getElementById('disc-custom-time').value = timeLimit;
+        }
         // Load hình ảnh nếu có
         if (q.imageData) {
             STATE.discImageData = q.imageData;
@@ -1165,6 +1183,9 @@ function stopDiscussion() {
     document.getElementById('btn-timer-resume').style.display = 'none';
     playSound('timeup');
     saveSessionHistory('discussion');
+
+    // [FIX BUG-B] Xóa currentQuestion để tránh HS miss câu hỏi mới trùng ID
+    db.ref(`rooms/${STATE.roomId}/currentQuestion`).remove();
 
     // Kiểm tra: nếu đang trong lesson plan → gọi lpStopStep
     db.ref(`rooms/${STATE.roomId}/lessonStepIndex`).once('value', snap => {
@@ -1721,38 +1742,53 @@ function formatAnswerContent(text) {
 function submitStudentAnswer() {
     const content = document.getElementById('disc-answer-input').value.trim();
     if (!content && STATE.attachedFiles.length === 0) { showToast('Vui lòng nhập câu trả lời!', 'error'); return; }
-    const answerData = { content, status: 'submitted', submittedAt: Date.now(), submittedBy: STATE.studentName };
-    if (STATE.attachedFiles.length > 0) answerData.files = STATE.attachedFiles;
-    // Save to answers (for real-time teacher view)
-    db.ref(`rooms/${STATE.roomId}/answers/nhom-${STATE.groupNumber}`).set(answerData);
-    // ALSO save to discussionAnswers (for student history tab) with question content
-    const qId = STATE.currentDiscQuestionId || 'unknown';
-    db.ref(`rooms/${STATE.roomId}/currentQuestion`).once('value', qSnap => {
-        const q = qSnap.val();
-        const historyEntry = {
-            answer: content,
-            questionContent: q ? `${q.title || ''} — ${q.content || ''}` : qId,
-            submittedAt: Date.now(),
-            submittedBy: STATE.studentName
-        };
-        db.ref(`rooms/${STATE.roomId}/discussionAnswers/${qId}/nhom-${STATE.groupNumber}`).set(historyEntry);
+
+    // [FIX BUG-C] Kiểm tra timer trước khi cho phép nộp — tránh nộp bài sau hết giờ
+    db.ref(`rooms/${STATE.roomId}/timer`).once('value', tSnap => {
+        const t = tSnap.val();
+        if (t && t.remaining <= 0 && t.paused) {
+            showToast('Đã hết giờ! Không thể nộp bài.', 'error');
+            document.getElementById('disc-answer-input').disabled = true;
+            document.getElementById('btn-submit-answer').disabled = true;
+            return;
+        }
+
+        const answerData = { content, status: 'submitted', submittedAt: Date.now(), submittedBy: STATE.studentName };
+        if (STATE.attachedFiles.length > 0) answerData.files = STATE.attachedFiles;
+        // Save to answers (for real-time teacher view)
+        db.ref(`rooms/${STATE.roomId}/answers/nhom-${STATE.groupNumber}`).set(answerData);
+        // ALSO save to discussionAnswers (for student history tab) with question content
+        const qId = STATE.currentDiscQuestionId || 'unknown';
+        db.ref(`rooms/${STATE.roomId}/currentQuestion`).once('value', qSnap => {
+            const q = qSnap.val();
+            const historyEntry = {
+                answer: content,
+                questionContent: q ? `${q.title || ''} — ${q.content || ''}` : qId,
+                submittedAt: Date.now(),
+                submittedBy: STATE.studentName
+            };
+            db.ref(`rooms/${STATE.roomId}/discussionAnswers/${qId}/nhom-${STATE.groupNumber}`).set(historyEntry);
+        });
+        // Clear draft after successful submit
+        if (STATE.currentDiscDraftKey) safeRemoveItem(STATE.currentDiscDraftKey);
+        document.getElementById('btn-submit-answer').style.display = 'none';
+        document.getElementById('disc-submitted-badge').style.display = '';
+        showToast('Đã gửi câu trả lời!', 'success');
+        // Ngay sau khi gửi → hiện câu trả lời các nhóm khác + nhận xét
+        document.getElementById('peer-review-area').style.display = '';
+        loadPeerAnswers();
+        loadEvaluation();
     });
-    // Clear draft after successful submit
-    if (STATE.currentDiscDraftKey) safeRemoveItem(STATE.currentDiscDraftKey);
-    document.getElementById('btn-submit-answer').style.display = 'none';
-    document.getElementById('disc-submitted-badge').style.display = '';
-    showToast('Đã gửi câu trả lời!', 'success');
-    // Ngay sau khi gửi → hiện câu trả lời các nhóm khác + nhận xét
-    document.getElementById('peer-review-area').style.display = '';
-    loadPeerAnswers();
-    loadEvaluation();
 }
 
 function loadPeerAnswers() {
-    // [FIX BUG-03] Gọi initReactionListener và loadPeerComments 1 lần duy nhất,
-    // không lồng trong .on('value') để tránh listener nhân bản exponentially
-    initReactionListener();
-    loadPeerComments();
+    // [FIX BUG-F] Chỉ init reaction/comment listeners 1 lần duy nhất
+    // Tránh re-subscribe mỗi khi loadPeerAnswers() được gọi lại
+    if (!window._peerListenersInited) {
+        window._peerListenersInited = true;
+        initReactionListener();
+        loadPeerComments();
+    }
     db.ref(`rooms/${STATE.roomId}/answers`).on('value', snap => {
         const answers = snap.val() || {};
         // [FIX BUG-03] Chỉ reset cache peer, giữ cache teacher và own
@@ -3054,14 +3090,26 @@ function initTimerControls() {
     document.getElementById('btn-timer-add1').addEventListener('click', () => {
         STATE.timerRemaining += 60;
         STATE.timerDuration += 60;
-        db.ref(`rooms/${STATE.roomId}/timer`).update({ remaining: STATE.timerRemaining, duration: STATE.timerDuration });
+        // [FIX BUG-A/E] Cập nhật startedAt để HS đồng bộ đúng thời gian
+        db.ref(`rooms/${STATE.roomId}/timer`).update({
+            remaining: STATE.timerRemaining,
+            duration: STATE.timerRemaining,
+            startedAt: Date.now(),
+            paused: STATE.timerPaused
+        });
         document.getElementById('teacher-disc-time').textContent = formatTime(STATE.timerRemaining);
         showToast('+1 phút', 'success');
     });
     document.getElementById('btn-timer-add2').addEventListener('click', () => {
         STATE.timerRemaining += 120;
         STATE.timerDuration += 120;
-        db.ref(`rooms/${STATE.roomId}/timer`).update({ remaining: STATE.timerRemaining, duration: STATE.timerDuration });
+        // [FIX BUG-A/E] Cập nhật startedAt để HS đồng bộ đúng thời gian
+        db.ref(`rooms/${STATE.roomId}/timer`).update({
+            remaining: STATE.timerRemaining,
+            duration: STATE.timerRemaining,
+            startedAt: Date.now(),
+            paused: STATE.timerPaused
+        });
         document.getElementById('teacher-disc-time').textContent = formatTime(STATE.timerRemaining);
         showToast('+2 phút', 'success');
     });
@@ -3255,25 +3303,27 @@ function initDiscussionRanking() {
 }
 
 /* --- Session History --- */
+// [FIX BUG-D] Dùng Promise.all thay vì callback pyramid — nhanh hơn + tránh race condition
 function saveSessionHistory(type) {
-    db.ref(`rooms/${STATE.roomId}/currentQuestion`).once('value', qSnap => {
+    const base = `rooms/${STATE.roomId}`;
+    Promise.all([
+        db.ref(`${base}/currentQuestion`).once('value'),
+        db.ref(`${base}/answers`).once('value'),
+        db.ref(`${base}/evaluations`).once('value')
+    ]).then(([qSnap, aSnap, eSnap]) => {
         const q = qSnap.val();
-        db.ref(`rooms/${STATE.roomId}/answers`).once('value', aSnap => {
-            const answers = aSnap.val() || {};
-            db.ref(`rooms/${STATE.roomId}/evaluations`).once('value', eSnap => {
-                const evals = eSnap.val() || {};
-                const sessionData = {
-                    type: type,
-                    question: q ? (q.title || q.content) : 'Không rõ',
-                    timestamp: Date.now(),
-                    answerCount: Object.keys(answers).length,
-                    evalCount: Object.keys(evals).length,
-                    answers: answers,
-                    evaluations: evals
-                };
-                db.ref(`rooms/${STATE.roomId}/sessionHistory`).push(sessionData);
-            });
-        });
+        const answers = aSnap.val() || {};
+        const evals = eSnap.val() || {};
+        const sessionData = {
+            type: type,
+            question: q ? (q.title || q.content) : 'Không rõ',
+            timestamp: Date.now(),
+            answerCount: Object.keys(answers).length,
+            evalCount: Object.keys(evals).length,
+            answers: answers,
+            evaluations: evals
+        };
+        db.ref(`${base}/sessionHistory`).push(sessionData);
     });
 }
 
