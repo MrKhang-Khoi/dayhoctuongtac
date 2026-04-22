@@ -65,7 +65,7 @@ const TEAM_COLORS = ['#667eea','#f5576c','#ffd700','#00d2ff','#38ef7d','#f093fb'
 // [FIX C3] Helper escape HTML — chống XSS khi chèn user data vào innerHTML
 function escapeHtml(str) {
     if (!str) return '';
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 /* === 3. UI MODULE === */
@@ -270,6 +270,9 @@ function loginStudent(name) {
 
     showScreen('student-home');
     initStudentHome();
+    // [FIX BUG-09/10] Gọi các listener dành cho HS sau khi đã đăng nhập
+    initStudentCountdownListener();
+    initStudentLessonListener();
     const teamLabel = STATE.teamId ? ` (${STATE.teamConfig?.teams?.[STATE.teamId]?.name || STATE.teamId})` : '';
     showToast(`Chào mừng ${name} — Nhóm ${STATE.groupNumber}${teamLabel}!`, 'success');
 }
@@ -320,6 +323,9 @@ function restoreSession() {
             else if (st === 'quiz') { showScreen('quiz-screen'); initQuizStudent(); }
             else if (st === 'homework') { showScreen('homework-screen'); initHomeworkStudent(); }
             else { showScreen('student-home'); initStudentHome(); }
+            // [FIX BUG-09/10] Gọi các listener dành cho HS sau khi restore
+            initStudentCountdownListener();
+            initStudentLessonListener();
         });
     } else if (data.role === 'teacher') {
         STATE.role = 'teacher';
@@ -428,6 +434,8 @@ function initStudentHome() {
             // Returned from activity — go back to student-home if on an activity screen
             const currentScreen = document.querySelector('.screen.active')?.id;
             if (currentScreen && currentScreen !== 'student-home' && currentScreen !== 'student-lobby' && currentScreen !== 'student-name-screen') {
+                // [FIX BUG-01] Gỡ listener status TRƯỚC khi gọi initStudentHome (tránh re-entry loop)
+                db.ref(`rooms/${STATE.roomId}/status`).off();
                 // Clean up homework listeners if coming from homework
                 if (currentScreen === 'homework-screen') {
                     db.ref(`rooms/${STATE.roomId}/homeworkState`).off();
@@ -599,14 +607,18 @@ function initTeacherDashboard() {
     initTeamManager();
     initHomeworkTeacher();
     initHomeworkBank();
+    // [FIX BUG-10] Gọi initLessonPlanBuilder chỉ cho GV (các nút btn-lp-* chỉ tồn tại trong DOM GV)
+    initLessonPlanBuilder();
 }
 
 function initOverviewPanel() {
     // Render compact groups bar in Teach tab
     const bar = document.getElementById('teach-groups-bar');
-    // [FIX B15] Gỡ listener cũ trước khi gắn mới
-    db.ref(`rooms/${STATE.roomId}/groups`).off('value');
-    db.ref(`rooms/${STATE.roomId}/groups`).on('value', snap => {
+    // [FIX BUG-02] Dùng named callback để chỉ gỡ listener của initOverviewPanel
+    if (STATE._overviewGroupsListener) {
+        db.ref(`rooms/${STATE.roomId}/groups`).off('value', STATE._overviewGroupsListener);
+    }
+    STATE._overviewGroupsListener = db.ref(`rooms/${STATE.roomId}/groups`).on('value', snap => {
         const groups = snap.val() || {};
         let onlineCount = 0;
         if (bar) {
@@ -1072,7 +1084,7 @@ function initDiscussionTeacher() {
         if (!this.value) { preview.style.display = 'none'; return; }
         db.ref(`questionBank/discussion/${this.value}`).once('value', snap => {
             const q = snap.val();
-            if (q) { preview.style.display = 'block'; preview.innerHTML = `<strong>${escapeHtml(q.title)}</strong><br>${escapeHtml(q.content)}<br><small>⏱ ${formatTime(q.timeLimit)}</small>`; }
+            if (q) { preview.style.display = 'block'; preview.innerHTML = `<strong>${escapeHtml(q.title)}</strong><br>${escapeHtml(q.content).replace(/\n/g, '<br>')}<br><small>⏱ ${formatTime(q.timeLimit)}</small>`; }
         });
     });
     document.getElementById('btn-send-discussion').addEventListener('click', sendDiscussion);
@@ -1120,7 +1132,11 @@ function sendDiscussion() {
             db.ref(`rooms/${STATE.roomId}/timer`).set({
                 remaining: q.timeLimit, duration: q.timeLimit, paused: false, startedAt: Date.now()
             });
+            // [FIX BUG-16] Xóa toàn bộ data đợt thảo luận trước
             db.ref(`rooms/${STATE.roomId}/answers`).remove();
+            db.ref(`rooms/${STATE.roomId}/evaluations`).remove();
+            db.ref(`rooms/${STATE.roomId}/peerReviews`).remove();
+            db.ref(`rooms/${STATE.roomId}/reactions`).remove();
             document.getElementById('btn-send-discussion').style.display = 'none';
             document.getElementById('btn-stop-discussion').style.display = '';
             document.getElementById('disc-answers-area').style.display = '';
@@ -1224,6 +1240,10 @@ function renderTeacherAnswers(answers, evals) {
     if (count >= 2) {
         document.getElementById('disc-answer-summary').style.display = '';
         renderAnswerClusters(answers);
+    } else {
+        // [FIX BUG-16] Ẩn phân tích khi chưa đủ dữ liệu (tránh hiện data cũ)
+        document.getElementById('disc-answer-summary').style.display = 'none';
+        document.getElementById('disc-answer-clusters').innerHTML = '';
     }
     // Cập nhật hiển thị reactions (có thể đã có reactions trước đó từ HS)
     updateTeacherReactionDisplay();
@@ -1471,7 +1491,8 @@ function initDiscussionStudent() {
             const previewEl = document.getElementById('math-preview');
             if (previewEl) previewEl.style.display = 'none';
 
-            document.getElementById('disc-question-display').innerHTML = `<strong>${escapeHtml(q.title)}</strong><br>${escapeHtml(q.content)}`;
+            // [FIX BUG-15] Chuyển \n thành <br> để hiển thị xuống dòng đúng
+            document.getElementById('disc-question-display').innerHTML = `<strong>${escapeHtml(q.title)}</strong><br>${escapeHtml(q.content).replace(/\n/g, '<br>')}`;
             // Hiển hình ảnh nếu có
             const imgContainer = document.getElementById('disc-question-image');
             const imgEl = document.getElementById('disc-question-image-img');
@@ -1728,9 +1749,16 @@ function submitStudentAnswer() {
 }
 
 function loadPeerAnswers() {
+    // [FIX BUG-03] Gọi initReactionListener và loadPeerComments 1 lần duy nhất,
+    // không lồng trong .on('value') để tránh listener nhân bản exponentially
+    initReactionListener();
+    loadPeerComments();
     db.ref(`rooms/${STATE.roomId}/answers`).on('value', snap => {
         const answers = snap.val() || {};
-        window._fileCache = {}; // reset cache file xem trước
+        // [FIX BUG-03] Chỉ reset cache peer, giữ cache teacher và own
+        Object.keys(window._fileCache || {}).forEach(k => {
+            if (!k.startsWith('teacher_') && !k.startsWith('own_')) delete window._fileCache[k];
+        });
         const list = document.getElementById('peer-answers-list');
         list.innerHTML = '';
 
@@ -1781,8 +1809,7 @@ function loadPeerAnswers() {
                 </div>`;
             list.appendChild(card);
         });
-        loadPeerComments();
-        initReactionListener(); // Bắt đầu lắng nghe reactions real-time
+        // [FIX BUG-03] Không gọi loadPeerComments/initReactionListener ở đây nữa
     });
 }
 
@@ -1855,6 +1882,15 @@ function startQuiz() {
             db.ref(`rooms/${STATE.roomId}/quizState`).set({
                 currentIndex: 0, total: STATE.quizQuestionsData.length, showingAnswer: false, finished: false
             });
+            // [FIX BUG-06] Cache số nhóm online thực tế để auto-reveal đúng
+            db.ref(`rooms/${STATE.roomId}/groups`).once('value', gSnap => {
+                const groups = gSnap.val() || {};
+                STATE._quizOnlineGroupCount = 0;
+                for (let i = 1; i <= TOTAL_GROUPS; i++) {
+                    const g = groups[`nhom-${i}`];
+                    if (g && g.online && g.members && g.members.length > 0) STATE._quizOnlineGroupCount++;
+                }
+            });
             for (let i = 1; i <= TOTAL_GROUPS; i++) { db.ref(`rooms/${STATE.roomId}/groups/nhom-${i}/score`).set(0); }
             db.ref(`rooms/${STATE.roomId}/quizAnswers`).remove();
             document.getElementById('quiz-setup-area').style.display = 'none';
@@ -1879,7 +1915,8 @@ function sendQuizQuestion(index) {
     // Update teacher-specific counter badge (renamed to avoid duplicate ID)
     const teacherCounter = document.getElementById('teacher-quiz-question-counter');
     if (teacherCounter) teacherCounter.textContent = `Câu ${index + 1}/${STATE.quizQuestionsData.length}`;
-    document.getElementById('quiz-teacher-question').innerHTML = `<div class="quiz-question-text">${escapeHtml(q.content)}</div>`;
+    // [FIX BUG-15] Chuyển \n thành <br> để hiển thị xuống dòng đúng
+    document.getElementById('quiz-teacher-question').innerHTML = `<div class="quiz-question-text">${escapeHtml(q.content).replace(/\n/g, '<br>')}</div>`;
     // Timer
     let remaining = q.timeLimit;
     clearInterval(STATE.timerInterval);
@@ -1976,13 +2013,20 @@ function endQuiz() {
 function listenQuizAnswerStats(index) {
     const q = STATE.quizQuestionsData[index];
     const qId = q.id;
-    db.ref(`rooms/${STATE.roomId}/quizAnswers/${qId}`).on('value', snap => {
+    // [FIX BUG-05] Gỡ listener câu trước khi gắn mới
+    if (STATE._quizAnswerListenerRef) {
+        STATE._quizAnswerListenerRef.off();
+    }
+    STATE._quizAnswerListenerRef = db.ref(`rooms/${STATE.roomId}/quizAnswers/${qId}`);
+    STATE._quizAnswerListenerRef.on('value', snap => {
         const answers = snap.val() || {};
         const total = Object.keys(answers).length;
 
         // [SECURITY] Tính nhóm online thực tế (có members) để kiểm tra "tất cả đã trả lời"
         // Nếu tất cả nhóm đã trả lời → auto-reveal kết quả
-        if (total > 0 && total >= TOTAL_GROUPS && !STATE.quizAnswerRevealed) {
+        // [FIX BUG-06] Dùng số nhóm online thực tế thay vì TOTAL_GROUPS
+        const onlineCount = STATE._quizOnlineGroupCount || TOTAL_GROUPS;
+        if (total > 0 && onlineCount > 0 && total >= onlineCount && !STATE.quizAnswerRevealed) {
             showQuizAnswer(index);
             return;
         }
@@ -3227,7 +3271,7 @@ function saveSessionHistory(type) {
                     answers: answers,
                     evaluations: evals
                 };
-                db.ref(`sessionHistory`).push(sessionData);
+                db.ref(`rooms/${STATE.roomId}/sessionHistory`).push(sessionData);
             });
         });
     });
@@ -3237,7 +3281,7 @@ function saveQuizSessionHistory() {
     db.ref(`rooms/${STATE.roomId}/groups`).once('value', snap => {
         const groups = snap.val() || {};
         const sorted = Object.entries(groups).filter(([_, g]) => g.members && g.members.length > 0).sort((a, b) => (b[1].score || 0) - (a[1].score || 0));
-        db.ref(`sessionHistory`).push({
+        db.ref(`rooms/${STATE.roomId}/sessionHistory`).push({
             type: 'quiz',
             question: `Trắc nghiệm ${STATE.quizSelectedQuestions.length} câu`,
             timestamp: Date.now(),
@@ -3392,7 +3436,8 @@ function initExportExcel() {
 }
 
 function exportToExcel() {
-    db.ref('sessionHistory').orderByChild('timestamp').limitToLast(100).once('value', snap => {
+    // [FIX BUG-13] Scope sessionHistory theo room
+    db.ref(`rooms/${STATE.roomId}/sessionHistory`).orderByChild('timestamp').limitToLast(100).once('value', snap => {
         const sessions = snap.val() || {};
         const keys = Object.keys(sessions).reverse();
         if (keys.length === 0) { showToast('Chưa có dữ liệu!', 'error'); return; }
@@ -3767,10 +3812,15 @@ function lpSavePlan() {
     }
 
     const planId = LP_BUILDER.editingPlanId || ('lp_' + Date.now().toString(36));
-    const plan = {
-        title, steps: LP_BUILDER.steps, createdAt: Date.now(), updatedAt: Date.now()
-    };
-    db.ref(`lessonPlans/${planId}`).set(plan);
+    // [FIX BUG-11] Giữ createdAt gốc khi edit, chỉ cập nhật updatedAt
+    if (LP_BUILDER.editingPlanId) {
+        db.ref(`lessonPlans/${planId}`).update({ title, steps: LP_BUILDER.steps, updatedAt: Date.now() });
+    } else {
+        const plan = {
+            title, steps: LP_BUILDER.steps, createdAt: Date.now(), updatedAt: Date.now()
+        };
+        db.ref(`lessonPlans/${planId}`).set(plan);
+    }
     showToast('Đã lưu kế hoạch!', 'success');
 
     // Reset builder
@@ -3952,7 +4002,11 @@ function lpRunStep(stepIdx) {
                     db.ref(`rooms/${STATE.roomId}/timer`).set({
                         remaining: q.timeLimit, duration: q.timeLimit, paused: false, startedAt: Date.now()
                     });
+                    // [FIX BUG-16] Xóa toàn bộ data đợt thảo luận trước
                     db.ref(`rooms/${STATE.roomId}/answers`).remove();
+                    db.ref(`rooms/${STATE.roomId}/evaluations`).remove();
+                    db.ref(`rooms/${STATE.roomId}/peerReviews`).remove();
+                    db.ref(`rooms/${STATE.roomId}/reactions`).remove();
                     showActivityView('discussion');
                     document.getElementById('btn-send-discussion').style.display = 'none';
                     document.getElementById('btn-stop-discussion').style.display = '';
@@ -4468,7 +4522,9 @@ function showActivityView(type) {
         if (activityView) activityView.style.display = '';
         const target = document.getElementById('activity-homework-view');
         if (target) target.style.display = '';
-        document.getElementById('btn-stop-homework').style.display = '';
+        // [FIX BUG-14] Null check cho btn-stop-homework (HS không có nút này)
+        const btnStopHw = document.getElementById('btn-stop-homework');
+        if (btnStopHw) btnStopHw.style.display = '';
     } else if (type === 'summary') {
         if (activityView) activityView.style.display = '';
         const target = document.getElementById('activity-summary-view');
@@ -4652,11 +4708,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (STATE.role === 'teacher' && teacherEl) teacherEl.textContent = text;
         else if (STATE.role === 'student' && studentEl) studentEl.textContent = text;
     });
-    // HS: Lắng nghe countdown
-    initStudentCountdownListener();
-    // Lesson Plan Engine
-    initLessonPlanBuilder();
-    initStudentLessonListener();
+    // [FIX BUG-09] HS: Lắng nghe countdown — chỉ gọi khi đã đăng nhập (trong loginStudent/restoreSession)
+    // initStudentCountdownListener(); // Đã chuyển vào loginStudent() và restoreSession()
+    // [FIX BUG-10] Lesson Plan Engine — chỉ gọi theo role
+    // initLessonPlanBuilder(); // Đã chuyển vào initTeacherDashboard()
+    // initStudentLessonListener(); // Đã chuyển vào loginStudent() và restoreSession()
 });
 
 /* ===========================================================
@@ -4796,7 +4852,12 @@ function initHomeworkTeacher() {
         if (!confirm('Kết thúc nhiệm vụ về nhà?')) return;
         db.ref(`rooms/${STATE.roomId}/homeworkState`).once('value', snap => {
             const hw = snap.val();
-            if (hw && hw.stepIdx !== undefined) lpStopStep(hw.stepIdx);
+            if (hw && hw.stepIdx !== undefined) {
+                lpStopStep(hw.stepIdx);
+            } else {
+                // [FIX BUG-04] Homework ngoài lesson plan → reset status thủ công
+                db.ref(`rooms/${STATE.roomId}`).update({ status: 'idle', mode: null });
+            }
             db.ref(`rooms/${STATE.roomId}/homeworkState`).update({ active: false, phase: 'ended' });
         });
     });
@@ -4941,8 +5002,10 @@ function renderHomeworkTeacherView(tc) {
     });
 
     // Listen for eval submissions + render matrix
-    db.ref(`rooms/${STATE.roomId}/homeworkEvals`).off();
-    db.ref(`rooms/${STATE.roomId}/homeworkEvals`).on('value', snap => {
+    // [FIX BUG-07] Dùng named reference để không gỡ listener của module khác
+    if (STATE._hwEvalsTeacherRef) STATE._hwEvalsTeacherRef.off();
+    STATE._hwEvalsTeacherRef = db.ref(`rooms/${STATE.roomId}/homeworkEvals`);
+    STATE._hwEvalsTeacherRef.on('value', snap => {
         const evals = snap.val() || {};
         renderEvalStatus(tc, evals);
         renderScoreMatrix(tc, evals, 'hw-matrix-scroll');
@@ -5341,6 +5404,9 @@ function initHomeworkStudent() {
 }
 
 function showHomeworkResults() {
+    // [FIX BUG-08] Guard tránh race condition với initStudentHome
+    if (STATE._homeworkEnding) return;
+    STATE._homeworkEnding = true;
     // Clean up listeners
     db.ref(`rooms/${STATE.roomId}/homeworkState`).off();
     db.ref(`rooms/${STATE.roomId}/homeworkEvals`).off();
@@ -5368,6 +5434,7 @@ function showHomeworkResults() {
     showScreen('student-home');
     initStudentHome();
     showToast('Hoạt động nhiệm vụ về nhà đã kết thúc! 🏠', 'info');
+    setTimeout(() => { STATE._homeworkEnding = false; }, 1000);
 
     // Auto-switch to homework tab
     setTimeout(() => {
