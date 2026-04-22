@@ -8,3 +8,5 @@ _audit.js
 audit_output.txt
 eslint_output.txt
 jshint_output.txt
+firebase-debug.log
+.firebaserc
